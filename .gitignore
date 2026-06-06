@@ -25,3 +25,5 @@ spark-warehouse/
 .idea/
 *.log
 .codex-log/
+
+docs/reference/
