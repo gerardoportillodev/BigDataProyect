@@ -7,6 +7,8 @@ services:
     hostname: namenode
     environment:
       SERVICE_ROLE: namenode
+    ports:
+      - "9870:9870"
     volumes:
       - .:/workspace
       - hdfs_namenode:/hadoop/dfs/name
