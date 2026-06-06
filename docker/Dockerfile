@@ -39,7 +39,7 @@ COPY docker/scripts/entrypoint.sh /entrypoint.sh
 
 RUN chmod +x /entrypoint.sh \
     && mkdir -p /hadoop/dfs/name /hadoop/dfs/data /workspace \
-    && pip install --no-cache-dir numpy openpyxl pytest "pyspark==3.5.3"
+    && pip install --no-cache-dir numpy openpyxl pytest "pyspark==3.5.3" pandas pyarrow
 
 WORKDIR /workspace
 ENTRYPOINT ["/usr/bin/tini", "--", "/entrypoint.sh"]

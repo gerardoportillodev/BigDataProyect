@@ -1,8 +1,8 @@
 # Resultados del experimento de modelado
 
-> **IMPORTANTE:** Este documento será actualizado con métricas oficiales tras ejecutar el pipeline distribuido completo.
-> Las métricas previas fueron eliminadas porque no tienen un `run_id` generado por el pipeline oficial.
-> Ejecuta `bash scripts/run_distributed_cluster.sh` para obtener el `run_id` oficial y poblar este documento.
+> **Corrida oficial completada el 6 de junio de 2026.**
+> Run ID: `official_20260606T191340Z`
+> Pipeline ejecutado con `bash scripts/run_distributed_cluster.sh` — 15 pasos, clúster 7 contenedores.
 
 ---
 
@@ -15,7 +15,7 @@
 | Spark Workers | 2 (ALIVE, Standalone) |
 | Replicación HDFS | 2 |
 | Spark Master URL | `spark://spark-master:7077` |
-| Executors por corrida | hasta 4 cores totales (1 core / 1 g por executor) |
+| Executors por corrida | 2 cores totales (1 core / 1.5 g por executor) |
 | Driver | spark-client (accesible desde ambos workers) |
 
 ## Target experimental
@@ -33,49 +33,63 @@ Alcance: **clasificación al corte** — no predicción futura.
 ## Run ID oficial
 
 ```
-# Se asignará automáticamente por run_distributed_cluster.sh con formato:
-# official_YYYYMMDDTHHMMSSZ
-# Ejemplo: official_20260606T150000Z
+official_20260606T191340Z
 ```
 
-El `run_id` se guarda en:
-
-```
-data/results/cluster_evidence/run_id.txt
-```
+Evidencia guardada en:
+- `data/results/cluster_evidence/hdfs_report_official_20260606T191340Z.txt`
+- `data/results/cluster_evidence/spark_master_official_20260606T191340Z.json`
+- `hdfs:///proyecto_crediticio/analytics/model_experiment/metrics/`
+- `hdfs:///proyecto_crediticio/analytics/model_experiment/confusion_matrix/`
 
 ## Universo de modelado
 
-> Pendiente de corrida oficial.
+| Partición | Registros |
+|---|---:|
+| Conjunto de prueba (30%) | 279,416 |
+| Conjunto de entrenamiento (70%) | ~651,970 (estimado) |
 
 ## Métricas
 
-> Pendiente de corrida oficial.
+| Modelo | Accuracy | Precision+ | Recall+ | F1+ | AUC-ROC | AUC-PR | TN | FP | FN | TP |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| logistic_regression | 93.9% | 79.8% | 82.5% | 81.1% | 94.4% | 88.2% | 226,065 | 9,218 | 7,729 | 36,404 |
+| **random_forest** | **97.3%** | **98.8%** | **84.0%** | **90.8%** | **98.1%** | **95.5%** | **234,847** | **436** | **7,055** | **37,078** |
 
-| Modelo | run_id | Accuracy | Precision+ | Recall+ | F1+ | AUC-ROC | AUC-PR | TN | FP | FN | TP |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| logistic_regression | — | — | — | — | — | — | — | — | — | — | — |
-| random_forest | — | — | — | — | — | — | — | — | — | — | — |
+**Ganador: Random Forest** en todas las métricas excepto Recall+ (diferencia marginal: 84.0% vs 82.5%).
 
 ## Saldo expuesto
 
-| Modelo | Saldo FN (riesgo no detectado) | Saldo FP (falsa alarma) |
+| Modelo | Saldo FN — riesgo no detectado | Saldo FP — falsa alarma |
 |---|---:|---:|
-| logistic_regression | — | — |
-| random_forest | — | — |
+| logistic_regression | $25,948,778 | $13,994,277 |
+| **random_forest** | $26,620,081 | **$606,510** |
+
+El Random Forest reduce el saldo expuesto por falsas alarmas en **$13.4M** (96% menos que LR), al costo de $671K adicionales en riesgo no detectado — un balance favorable para operaciones de cobranza.
 
 ## Matriz de confusión
 
-> Pendiente de corrida oficial.
+### Regresión Logística
+
+|  | Pred. 0 (Sano) | Pred. 1 (Riesgo) |
+|---|---:|---:|
+| **Real 0 (Sano)** | 226,065 ✅ | 9,218 ⚠️ |
+| **Real 1 (Riesgo)** | 7,729 ❌ | 36,404 ✅ |
+
+### Random Forest
+
+|  | Pred. 0 (Sano) | Pred. 1 (Riesgo) |
+|---|---:|---:|
+| **Real 0 (Sano)** | 234,847 ✅ | 436 ⚠️ |
+| **Real 1 (Riesgo)** | 7,055 ❌ | 37,078 ✅ |
 
 ## Importancia de variables (Random Forest)
 
-> Pendiente de corrida oficial. Se guarda en:
-> `hdfs:///proyecto_crediticio/analytics/model_experiment/feature_diagnostics`
+Guardada en HDFS: `hdfs:///proyecto_crediticio/analytics/model_experiment/feature_diagnostics/random_forest/`
 
 ## Coeficientes (Regresión Logística)
 
-> Pendiente de corrida oficial.
+Guardados en HDFS: `hdfs:///proyecto_crediticio/analytics/model_experiment/feature_diagnostics/logistic_regression/`
 
 ## Interpretación empresarial
 
@@ -98,9 +112,26 @@ En clasificación crediticia al corte:
 - StandardScaler aplicado únicamente a Regresión Logística.
 - Mismo split y seed para ambos modelos (`SEED = 20260430`, `test_size = 0.30`).
 
+## Modelos guardados en HDFS
+
+```
+/proyecto_crediticio/modelos/official_20260606T191340Z/logistic_regression/
+/proyecto_crediticio/modelos/official_20260606T191340Z/random_forest/
+```
+
+Ambos modelos se pueden cargar con `PipelineModel.load(path)`.
+
+## Scores anonimizados
+
+```
+/proyecto_crediticio/resultados/scores/official_20260606T191340Z/logistic_regression/
+/proyecto_crediticio/resultados/scores/official_20260606T191340Z/random_forest/
+```
+
+Columnas: `record_key` (SHA-256), `risk_probability`, `prediction`, `actual_label`. Sin PII.
+
 ## Siguientes pasos
 
-1. Ejecutar `bash scripts/run_distributed_cluster.sh`.
-2. Copiar `run_id` de `data/results/cluster_evidence/run_id.txt`.
-3. Poblar métricas desde `hdfs:///proyecto_crediticio/analytics/model_experiment/metrics`.
-4. Validar con negocio: significado de `NumeroDiasMora = 999`, `SubEstado`, y peso de `ValorMoraTotal`.
+1. Validar con negocio: significado de `NumeroDiasMora = 999`, `SubEstado`, y peso de `ValorMoraTotal`.
+2. Evaluar si ajustar el umbral de clasificación (default 0.5) para optimizar recall vs precision según apetito de riesgo.
+3. Analizar importancia de variables para interpretabilidad ante el comité.

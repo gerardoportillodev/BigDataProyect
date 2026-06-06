@@ -13,10 +13,11 @@ spark_submit() {
   spark-submit \
     --master spark://spark-master:7077 \
     --deploy-mode client \
+    --driver-memory 2g \
     --conf spark.ui.showConsoleProgress=false \
-    --conf spark.cores.max=4 \
+    --conf spark.cores.max=2 \
     --conf spark.executor.cores=1 \
-    --conf spark.executor.memory=1g \
+    --conf spark.executor.memory=1500m \
     --conf spark.driver.host=spark-client \
     --conf spark.driver.bindAddress=0.0.0.0 \
     --conf spark.driver.port=4045 \
@@ -30,6 +31,9 @@ echo "== Versiones =="
 hadoop version | head -1
 spark-submit --version 2>&1 | head -4
 python3 --version
+
+# ── Salir de safe mode si está activo ────────────────────────────────────────
+hdfs dfsadmin -safemode leave 2>/dev/null || true
 
 # ── Paso 7: Crear zonas HDFS ─────────────────────────────────────────────────
 echo ""
@@ -110,7 +114,10 @@ spark_submit \
   --output /proyecto_crediticio/analytics/model_experiment \
   --models-output /proyecto_crediticio/modelos \
   --scores-output /proyecto_crediticio/resultados/scores \
-  --run-id "$RUN_ID"
+  --run-id "$RUN_ID" \
+  --rf-trees 20 \
+  --rf-max-depth 6 \
+  --lr-max-iter 20
 
 # ── Paso 14: Guardar evidencia HDFS post-ejecución ──────────────────────────
 echo ""

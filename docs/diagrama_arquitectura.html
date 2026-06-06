@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Arquitectura Big Data — Riesgo Crediticio</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f1923; color: #e0e6f0; padding: 30px; }
+
+  h1 { text-align: center; font-size: 22px; color: #7eb8f7; margin-bottom: 6px; letter-spacing: 1px; }
+  .subtitle { text-align: center; font-size: 13px; color: #8a9bb5; margin-bottom: 30px; }
+
+  /* ── Sección: Arquitectura de Contenedores ── */
+  .section-title {
+    font-size: 13px; font-weight: 700; letter-spacing: 2px;
+    color: #7eb8f7; text-transform: uppercase; margin-bottom: 14px;
+    border-left: 3px solid #7eb8f7; padding-left: 10px;
+  }
+
+  .arch-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 30px;
+  }
+
+  .layer {
+    background: #1a2535;
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid #2a3a52;
+  }
+  .layer-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+    text-transform: uppercase; margin-bottom: 12px; text-align: center;
+  }
+
+  .container-box {
+    background: #0f1923;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    border-left: 4px solid;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .container-box .icon { font-size: 20px; }
+  .container-box .info { flex: 1; }
+  .container-box .name { font-size: 13px; font-weight: 700; }
+  .container-box .desc { font-size: 11px; color: #8a9bb5; margin-top: 2px; }
+  .container-box .tag {
+    font-size: 10px; background: #1a2535; border-radius: 4px;
+    padding: 2px 6px; color: #7eb8f7;
+  }
+
+  .hdfs { border-color: #f7a84a; }
+  .hdfs .layer-title { color: #f7a84a; }
+
+  .spark { border-color: #e25e3e; }
+  .spark .layer-title { color: #e25e3e; }
+
+  .client { border-color: #4ac7a4; }
+  .client .layer-title { color: #4ac7a4; }
+
+  /* ── Flecha de conexión ── */
+  .arrows {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 40px;
+    margin-bottom: 8px;
+    color: #2a3a52;
+    font-size: 22px;
+  }
+  .arrow-label { font-size: 10px; color: #8a9bb5; text-align: center; }
+
+  /* ── Pipeline de 15 pasos ── */
+  .pipeline {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-bottom: 30px;
+  }
+
+  .step {
+    background: #1a2535;
+    border-radius: 10px;
+    padding: 12px 10px;
+    border: 1px solid #2a3a52;
+    position: relative;
+    text-align: center;
+  }
+  .step-num {
+    width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+    margin: 0 auto 6px;
+  }
+  .step-icon { font-size: 18px; margin-bottom: 4px; }
+  .step-name { font-size: 11px; font-weight: 700; color: #c8d8ee; margin-bottom: 3px; }
+  .step-desc { font-size: 10px; color: #8a9bb5; line-height: 1.4; }
+  .step-where { font-size: 9px; margin-top: 5px; padding: 2px 6px; border-radius: 4px; display: inline-block; }
+
+  .s-local { border-color: #4ac7a4; }
+  .s-local .step-num { background: #4ac7a4; color: #0f1923; }
+  .s-local .step-where { background: #1a3530; color: #4ac7a4; }
+
+  .s-docker { border-color: #7eb8f7; }
+  .s-docker .step-num { background: #7eb8f7; color: #0f1923; }
+  .s-docker .step-where { background: #1a2a3f; color: #7eb8f7; }
+
+  .s-hdfs { border-color: #f7a84a; }
+  .s-hdfs .step-num { background: #f7a84a; color: #0f1923; }
+  .s-hdfs .step-where { background: #3f2a1a; color: #f7a84a; }
+
+  .s-spark { border-color: #e25e3e; }
+  .s-spark .step-num { background: #e25e3e; color: #fff; }
+  .s-spark .step-where { background: #3f1a1a; color: #e25e3e; }
+
+  .s-result { border-color: #b47ef7; }
+  .s-result .step-num { background: #b47ef7; color: #0f1923; }
+  .s-result .step-where { background: #2a1a3f; color: #b47ef7; }
+
+  /* ── Footer de métricas ── */
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  .metric-card {
+    background: #1a2535;
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+    border: 1px solid #2a3a52;
+  }
+  .metric-card .val { font-size: 28px; font-weight: 700; color: #7eb8f7; }
+  .metric-card .lbl { font-size: 11px; color: #8a9bb5; margin-top: 4px; }
+
+  .conn-line {
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px; margin-bottom: 20px; color: #8a9bb5; font-size: 11px;
+  }
+  .conn-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .line { flex: 1; height: 1px; background: #2a3a52; }
+</style>
+</head>
+<body>
+
+<h1>Sistema Distribuido de Evaluación de Riesgo Crediticio</h1>
+<p class="subtitle">Apache Hadoop 3.3.6 + Apache Spark 3.5.3 — Arquitectura 7 contenedores Docker</p>
+
+<!-- ── Arquitectura ── -->
+<div class="section-title">Arquitectura de Contenedores</div>
+<div class="arch-grid">
+
+  <!-- HDFS -->
+  <div class="layer hdfs">
+    <div class="layer-title">🗄️ Capa HDFS — Almacenamiento</div>
+    <div class="container-box hdfs">
+      <div class="icon">👑</div>
+      <div class="info">
+        <div class="name">NameNode</div>
+        <div class="desc">Directorio del sistema de archivos distribuido</div>
+      </div>
+      <div class="tag">:9870</div>
+    </div>
+    <div class="container-box hdfs">
+      <div class="icon">💾</div>
+      <div class="info">
+        <div class="name">DataNode 1</div>
+        <div class="desc">Almacena bloques de datos (replicación 2)</div>
+      </div>
+    </div>
+    <div class="container-box hdfs">
+      <div class="icon">💾</div>
+      <div class="info">
+        <div class="name">DataNode 2</div>
+        <div class="desc">Réplica de bloques — alta disponibilidad</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Spark -->
+  <div class="layer spark">
+    <div class="layer-title">⚡ Capa Spark — Procesamiento</div>
+    <div class="container-box spark">
+      <div class="icon">🎯</div>
+      <div class="info">
+        <div class="name">Spark Master</div>
+        <div class="desc">Coordinador del clúster Standalone</div>
+      </div>
+      <div class="tag">:8080</div>
+    </div>
+    <div class="container-box spark">
+      <div class="icon">⚙️</div>
+      <div class="info">
+        <div class="name">Spark Worker 1</div>
+        <div class="desc">2 cores · 2 GB RAM</div>
+      </div>
+      <div class="tag">:8081</div>
+    </div>
+    <div class="container-box spark">
+      <div class="icon">⚙️</div>
+      <div class="info">
+        <div class="name">Spark Worker 2</div>
+        <div class="desc">2 cores · 2 GB RAM</div>
+      </div>
+      <div class="tag">:8082</div>
+    </div>
+  </div>
+
+  <!-- Client -->
+  <div class="layer client">
+    <div class="layer-title">🚀 Capa Cliente — Orquestación</div>
+    <div class="container-box client">
+      <div class="icon">💻</div>
+      <div class="info">
+        <div class="name">Spark Client</div>
+        <div class="desc">Envía jobs via spark-submit al clúster. Ejecuta el pipeline completo de 15 pasos.</div>
+      </div>
+      <div class="tag">:4040</div>
+    </div>
+    <br>
+    <div style="font-size:11px; color:#8a9bb5; padding: 8px; background:#0f1923; border-radius:8px; line-height:1.7;">
+      <b style="color:#4ac7a4;">Comando oficial:</b><br>
+      <code style="color:#c8d8ee;">bash scripts/run_distributed_cluster.sh</code>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Flujo de datos ── -->
+<div class="conn-line">
+  <span class="conn-dot" style="background:#4ac7a4"></span>Local
+  <div class="line"></div>
+  <span class="conn-dot" style="background:#7eb8f7"></span>Docker
+  <div class="line"></div>
+  <span class="conn-dot" style="background:#f7a84a"></span>HDFS
+  <div class="line"></div>
+  <span class="conn-dot" style="background:#e25e3e"></span>Spark
+  <div class="line"></div>
+  <span class="conn-dot" style="background:#b47ef7"></span>Resultados
+</div>
+
+<!-- ── Pipeline ── -->
+<div class="section-title">Pipeline de 15 Pasos</div>
+<div class="pipeline">
+
+  <div class="step s-local">
+    <div class="step-num">1</div>
+    <div class="step-icon">📄</div>
+    <div class="step-name">Exportar XLSM</div>
+    <div class="step-desc">Convierte el Excel con macros a TSV plano</div>
+    <div class="step-where">Local · Python</div>
+  </div>
+
+  <div class="step s-docker">
+    <div class="step-num">2</div>
+    <div class="step-icon">🐳</div>
+    <div class="step-name">Build Imágenes</div>
+    <div class="step-desc">Construye la imagen Docker con Hadoop + Spark + Python</div>
+    <div class="step-where">Docker Build</div>
+  </div>
+
+  <div class="step s-docker">
+    <div class="step-num">3</div>
+    <div class="step-icon">🚀</div>
+    <div class="step-name">Levantar Clúster</div>
+    <div class="step-desc">Inicia los 7 contenedores en red bigdata_net</div>
+    <div class="step-where">docker compose up</div>
+  </div>
+
+  <div class="step s-hdfs">
+    <div class="step-num">4</div>
+    <div class="step-icon">👑</div>
+    <div class="step-name">Esperar HDFS</div>
+    <div class="step-desc">Valida que el NameNode responda en :9870</div>
+    <div class="step-where">healthcheck</div>
+  </div>
+
+  <div class="step s-hdfs">
+    <div class="step-num">5</div>
+    <div class="step-icon">💾</div>
+    <div class="step-name">2 DataNodes Vivos</div>
+    <div class="step-desc">Confirma que ambos DataNodes están registrados</div>
+    <div class="step-where">dfsadmin -report</div>
+  </div>
+
+  <div class="step s-spark">
+    <div class="step-num">6</div>
+    <div class="step-icon">⚡</div>
+    <div class="step-name">2 Workers ALIVE</div>
+    <div class="step-desc">Verifica que ambos Workers están activos en el Master</div>
+    <div class="step-where">Spark REST API</div>
+  </div>
+
+  <div class="step s-hdfs">
+    <div class="step-num">7</div>
+    <div class="step-icon">📂</div>
+    <div class="step-name">Zonas HDFS</div>
+    <div class="step-desc">Crea carpetas: raw, trusted, analytics, modelos, resultados</div>
+    <div class="step-where">hdfs dfs -mkdir</div>
+  </div>
+
+  <div class="step s-hdfs">
+    <div class="step-num">8</div>
+    <div class="step-icon">⬆️</div>
+    <div class="step-name">Carga TSV → HDFS</div>
+    <div class="step-desc">Sube el archivo crudo con replicación 2 en ambos DataNodes</div>
+    <div class="step-where">hdfs dfs -put</div>
+  </div>
+
+  <div class="step s-spark">
+    <div class="step-num">9</div>
+    <div class="step-icon">🔍</div>
+    <div class="step-name">Perfilado</div>
+    <div class="step-desc">Analiza nulos, tipos y distribuciones del dataset crudo</div>
+    <div class="step-where">spark-submit</div>
+  </div>
+
+  <div class="step s-spark">
+    <div class="step-num">10</div>
+    <div class="step-icon">🧹</div>
+    <div class="step-name">Zona Trusted</div>
+    <div class="step-desc">Limpieza, casteo de tipos, guarda Parquet en HDFS/trusted</div>
+    <div class="step-where">spark-submit</div>
+  </div>
+
+  <div class="step s-spark">
+    <div class="step-num">11</div>
+    <div class="step-icon">✅</div>
+    <div class="step-name">Validación Calidad</div>
+    <div class="step-desc">Verifica integridad: nulls, rangos, duplicados, target</div>
+    <div class="step-where">spark-submit</div>
+  </div>
+
+  <div class="step s-spark">
+    <div class="step-num">12-13</div>
+    <div class="step-icon">🤖</div>
+    <div class="step-name">Entrenar Modelos</div>
+    <div class="step-desc">Regresión Logística (con Scaler) y Random Forest en paralelo distribuido</div>
+    <div class="step-where">spark-submit · MLlib</div>
+  </div>
+
+  <div class="step s-result">
+    <div class="step-num">14</div>
+    <div class="step-icon">📊</div>
+    <div class="step-name">Comparar Modelos</div>
+    <div class="step-desc">AUC-ROC, F1, Precisión, Recall, FP/FN, exposición de saldo</div>
+    <div class="step-where">HDFS/resultados</div>
+  </div>
+
+  <div class="step s-result">
+    <div class="step-num">15</div>
+    <div class="step-icon">🏆</div>
+    <div class="step-name">Scores Finales</div>
+    <div class="step-desc">Guarda scores anonimizados (SHA-256) y modelos en HDFS</div>
+    <div class="step-where">HDFS/modelos</div>
+  </div>
+
+</div>
+
+<!-- ── Métricas del sistema ── -->
+<div class="section-title">Capacidad del Clúster</div>
+<div class="metrics">
+  <div class="metric-card">
+    <div class="val">7</div>
+    <div class="lbl">Contenedores Docker en red privada</div>
+  </div>
+  <div class="metric-card">
+    <div class="val" style="color:#f7a84a;">2x</div>
+    <div class="lbl">Replicación HDFS en DataNodes independientes</div>
+  </div>
+  <div class="metric-card">
+    <div class="val" style="color:#e25e3e;">4</div>
+    <div class="lbl">Cores Spark distribuidos (2 workers × 2)</div>
+  </div>
+  <div class="metric-card">
+    <div class="val" style="color:#b47ef7;">2</div>
+    <div class="lbl">Modelos ML entrenados y comparados (LR vs RF)</div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -43,34 +43,40 @@ docker compose up -d
 
 # ── Paso 4: Esperar que HDFS esté disponible ──────────────────────────────────
 echo ""
-echo "== Paso 4: Esperando HDFS =="
+echo "== Paso 4: Esperando HDFS (UI en :9870) =="
 MAX_WAIT=120
 ELAPSED=0
-until docker compose exec -T namenode hdfs dfsadmin -safemode get 2>/dev/null | grep -q "Safe mode is OFF"; do
+until docker compose exec -T namenode bash -c "curl -fsS http://localhost:9870/ > /dev/null 2>&1"; do
   if [ $ELAPSED -ge $MAX_WAIT ]; then
-    echo "ERROR: HDFS no salió de safe mode en ${MAX_WAIT}s"
+    echo "ERROR: NameNode HTTP no respondió en ${MAX_WAIT}s"
     docker compose logs namenode | tail -20
     exit 1
   fi
-  echo "  HDFS en safe mode... esperando ($ELAPSED/$MAX_WAIT s)"
-  sleep 10
-  ELAPSED=$((ELAPSED + 10))
+  echo "  Esperando NameNode... ($ELAPSED/$MAX_WAIT s)"
+  sleep 5
+  ELAPSED=$((ELAPSED + 5))
 done
-echo "  HDFS disponible."
+echo "  NameNode HTTP disponible."
 
 # ── Paso 5: Esperar 2 DataNodes vivos ────────────────────────────────────────
 echo ""
 echo "== Paso 5: Esperando 2 DataNodes vivos =="
-MAX_WAIT=60
+MAX_WAIT=90
 ELAPSED=0
-until [ "$(docker compose exec -T namenode hdfs dfsadmin -report 2>/dev/null | grep -c 'Live datanodes')" -ge 1 ] && \
-      [ "$(docker compose exec -T namenode hdfs dfsadmin -report 2>/dev/null | grep 'Live datanodes' | grep -oP '\d+' | head -1)" -ge 2 ]; do
+until docker compose exec -T namenode hdfs dfsadmin -report 2>/dev/null \
+      | python3 -c "
+import sys, re
+text = sys.stdin.read()
+m = re.search(r'Live datanodes\s*\((\d+)\)', text)
+n = int(m.group(1)) if m else 0
+sys.exit(0 if n >= 2 else 1)
+" 2>/dev/null; do
   if [ $ELAPSED -ge $MAX_WAIT ]; then
     echo "ERROR: No se registraron 2 DataNodes en ${MAX_WAIT}s"
     docker compose exec -T namenode hdfs dfsadmin -report 2>/dev/null | head -10
     exit 1
   fi
-  echo "  Esperando DataNodes... ($ELAPSED/$MAX_WAIT s)"
+  echo "  Esperando DataNodes... ($ELAPSED/${MAX_WAIT}s)"
   sleep 10
   ELAPSED=$((ELAPSED + 10))
 done
