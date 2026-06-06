@@ -1,23 +1,134 @@
 services:
-  bigdata:
+  namenode:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    container_name: bigdata_riesgo_crediticio
-    hostname: bigdata
+    container_name: bigdata_namenode
+    hostname: namenode
+    environment:
+      SERVICE_ROLE: namenode
     ports:
       - "9870:9870"
       - "9000:9000"
-      - "4040:4040"
     volumes:
       - .:/workspace
       - hdfs_namenode:/hadoop/dfs/name
-      - hdfs_datanode:/hadoop/dfs/data
-    working_dir: /workspace
+    networks: [bigdata_net]
+
+  datanode-1:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: bigdata_datanode_1
+    hostname: datanode-1
     environment:
-      HADOOP_CONF_DIR: /opt/hadoop/etc/hadoop
-      SPARK_LOCAL_IP: 127.0.0.1
+      SERVICE_ROLE: datanode
+    depends_on: [namenode]
+    volumes:
+      - .:/workspace
+      - hdfs_datanode_1:/hadoop/dfs/data
+    networks: [bigdata_net]
+
+  datanode-2:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: bigdata_datanode_2
+    hostname: datanode-2
+    environment:
+      SERVICE_ROLE: datanode
+    depends_on: [namenode]
+    volumes:
+      - .:/workspace
+      - hdfs_datanode_2:/hadoop/dfs/data
+    networks: [bigdata_net]
+
+  spark-master:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: bigdata_spark_master
+    hostname: spark-master
+    environment:
+      SERVICE_ROLE: spark-master
+      SPARK_MASTER_HOST: spark-master
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    volumes:
+      - .:/workspace
+    networks: [bigdata_net]
+
+  spark-worker-1:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: bigdata_spark_worker_1
+    hostname: spark-worker-1
+    environment:
+      SERVICE_ROLE: spark-worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_WORKER_HOSTNAME: spark-worker-1
+      SPARK_WORKER_CORES: 2
+      SPARK_WORKER_MEMORY: 2g
+      SPARK_WORKER_WEBUI_PORT: 8081
+    depends_on: [spark-master]
+    ports:
+      - "8081:8081"
+    volumes:
+      - .:/workspace
+    networks: [bigdata_net]
+
+  spark-worker-2:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: bigdata_spark_worker_2
+    hostname: spark-worker-2
+    environment:
+      SERVICE_ROLE: spark-worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_WORKER_HOSTNAME: spark-worker-2
+      SPARK_WORKER_CORES: 2
+      SPARK_WORKER_MEMORY: 2g
+      SPARK_WORKER_WEBUI_PORT: 8081
+    depends_on: [spark-master]
+    ports:
+      - "8082:8081"
+    volumes:
+      - .:/workspace
+    networks: [bigdata_net]
+
+  spark-client:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: bigdata_spark_client
+    hostname: spark-client
+    environment:
+      SERVICE_ROLE: client
+      HDFS_URI: hdfs://namenode:9000
+      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_LOCAL_IP: spark-client
+    depends_on:
+      - namenode
+      - datanode-1
+      - datanode-2
+      - spark-master
+      - spark-worker-1
+      - spark-worker-2
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    ports:
+      - "4040:4040"
+    networks: [bigdata_net]
 
 volumes:
   hdfs_namenode:
-  hdfs_datanode:
+  hdfs_datanode_1:
+  hdfs_datanode_2:
+
+networks:
+  bigdata_net:
+    driver: bridge
