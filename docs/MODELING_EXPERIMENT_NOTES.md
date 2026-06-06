@@ -62,7 +62,7 @@ No se usan como predictoras:
 ## Ejecutar
 
 ```bash
-cd ~/Downloads/proyecto_big_data_codex
+cd ~/Downloads/proyecto_big_data_riesgo_crediticio
 source scripts/use_local_spark.sh
 SPARK_LOCAL_IP=127.0.0.1 python src/04_train_compare_models.py \
   --input data/trusted/obligaciones \

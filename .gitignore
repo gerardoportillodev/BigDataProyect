@@ -24,7 +24,6 @@ spark-warehouse/
 .vscode/
 .idea/
 *.log
-.codex-log/
 
 docs/reference/
 

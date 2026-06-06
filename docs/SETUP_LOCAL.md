@@ -5,7 +5,7 @@ Este setup deja PySpark funcionando en la Mac sin cambiar el Java del sistema.
 ## Activar ambiente
 
 ```bash
-cd ~/Downloads/proyecto_big_data_codex
+cd ~/Downloads/proyecto_big_data_riesgo_crediticio
 source scripts/use_local_spark.sh
 ```
 

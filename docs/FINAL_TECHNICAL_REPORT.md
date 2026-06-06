@@ -89,14 +89,14 @@ docs/FINAL_TECHNICAL_REPORT.md
 Activar ambiente local Spark:
 
 ```bash
-cd ~/Downloads/proyecto_big_data_codex
+cd ~/Downloads/proyecto_big_data_riesgo_crediticio
 source scripts/use_local_spark.sh
 ```
 
 Verificar Docker:
 
 ```bash
-cd ~/Downloads/proyecto_big_data_codex
+cd ~/Downloads/proyecto_big_data_riesgo_crediticio
 bash scripts/docker_terminal_check.sh
 ```
 
@@ -159,7 +159,7 @@ bash scripts/run_model_experiment.sh
 Cuando se use el contenedor Hadoop/Spark de clase, el flujo esperado es:
 
 ```bash
-cd ~/Downloads/proyecto_big_data_codex
+cd ~/Downloads/proyecto_big_data_riesgo_crediticio
 docker compose up -d
 docker ps
 ```
