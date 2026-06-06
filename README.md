@@ -11,12 +11,7 @@ El enfoque corresponde a la **Opción 2 de la rúbrica**: dos técnicas con prop
 
 ## Caso de negocio
 
-Clasificar obligaciones financieras activas según señales de riesgo crediticio para apoyar:
-
-- priorización de gestión preventiva,
-- segmentación de cartera,
-- asignación de recursos de cobranza,
-- análisis de deterioro crediticio al corte.
+Clasificar obligaciones financieras activas según señales de riesgo crediticio para apoyar la priorización de gestión preventiva, segmentación de cartera, asignación de recursos de cobranza y análisis de deterioro crediticio al corte.
 
 El dataset disponible es una fotografía de cartera al corte de abril de 2026. Por esta razón, el alcance metodológico se presenta como **clasificación de riesgo crediticio al corte**, no como predicción futura de mora.
 
@@ -118,7 +113,7 @@ Las pruebas usan datos sintéticos anonimizados.
 Desde la raíz del proyecto:
 
 ```bash
-cd ~/Downloads/proyecto_big_data_codex
+cd ~/Downloads/proyecto_big_data_riesgo_crediticio
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -149,7 +144,7 @@ Resultado validado:
 ### 1. Verificar Docker
 
 ```bash
-cd ~/Downloads/proyecto_big_data_codex
+cd ~/Downloads/proyecto_big_data_riesgo_crediticio
 bash scripts/docker_terminal_check.sh
 ```
 
@@ -167,7 +162,7 @@ Docker Compose version v5.0.1
 ### 2. Activar ambiente Spark local
 
 ```bash
-cd ~/Downloads/proyecto_big_data_codex
+cd ~/Downloads/proyecto_big_data_riesgo_crediticio
 source scripts/use_local_spark.sh
 ```
 
