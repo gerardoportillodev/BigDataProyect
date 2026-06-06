@@ -32,20 +32,44 @@ Características validadas:
 
 El archivo contiene información personal y financiera. Por protección de datos, no se imprimen registros reales ni identificadores como `NombreCompleto`, `Identificacion6`, `Identificacion2` o `NumeroDeObligacion`.
 
-## 5. Arquitectura Big Data
+## 5. Arquitectura Big Data distribuida
 
 ```text
-Excel .xlsm -> TSV/CSV -> HDFS raw -> Spark DataFrames -> Perfilado y limpieza distribuida -> Parquet trusted -> Spark SQL analytics -> MLlib -> Resultados y documentación
+Excel .xlsm
+  -> TSV/CSV (local)
+  -> HDFS raw (replicación 2, 2 DataNodes)
+  -> Spark DataFrames (Spark Standalone, 2 Workers)
+  -> Perfilado y limpieza distribuida
+  -> Parquet trusted
+  -> Spark SQL analytics
+  -> MLlib (LR + RF, pipelines separados)
+  -> Modelos en HDFS + Scores anonimizados + Métricas
 ```
 
-Zonas HDFS propuestas:
+### Cluster Docker (7 contenedores)
+
+| Contenedor | Rol | Puerto |
+|---|---|---|
+| `namenode` | HDFS NameNode | 9870 (UI), 9000 |
+| `datanode-1` | HDFS DataNode 1 | — |
+| `datanode-2` | HDFS DataNode 2 | — |
+| `spark-master` | Spark Standalone Master | 8080 (UI), 7077 |
+| `spark-worker-1` | Spark Worker (2 cores, 2g) | 8081 (UI) |
+| `spark-worker-2` | Spark Worker (2 cores, 2g) | 8082 (UI) |
+| `spark-client` | Driver spark-submit | 4040 (App UI) |
+
+- HDFS `dfs.replication = 2`
+- Spark Master URL: `spark://spark-master:7077`
+- Sin `local[*]` — todo distribuido
+
+Zonas HDFS:
 
 ```text
-/proyecto_crediticio/raw
-/proyecto_crediticio/trusted
-/proyecto_crediticio/analytics
-/proyecto_crediticio/modelos
-/proyecto_crediticio/resultados
+/proyecto_crediticio/raw/                        ← TSV fuente (replicación 2)
+/proyecto_crediticio/trusted/                    ← Parquet limpio
+/proyecto_crediticio/analytics/                  ← Perfilado, validación, métricas
+/proyecto_crediticio/modelos/<run_id>/           ← PipelineModel LR y RF
+/proyecto_crediticio/resultados/scores/<run_id>/ ← Scores anonimizados
 ```
 
 ## 6. Estructura de código creada
@@ -58,18 +82,38 @@ src/00_export_xlsm_to_tsv.py
 src/01_ingest_profile.py
 src/02_clean_to_parquet.py
 src/03_validate_quality_target.py
-src/04_train_compare_models.py
+src/04_train_compare_models.py    ← pipelines separados LR/RF, Imputer median,
+                                     StandardScaler solo en LR, record_key hash,
+                                     scores anonimizados, modelos en HDFS,
+                                     métricas completas + saldo expuesto
 src/project_config.py
 src/xlsm_utils.py
 ```
 
-Scripts de consola:
+Scripts de orquestación distribuida:
 
 ```text
-scripts/use_local_spark.sh
-scripts/docker_terminal_check.sh
-scripts/run_local_spark_pipeline.sh
-scripts/run_model_experiment.sh
+scripts/run_distributed_cluster.sh   ← COMANDO OFICIAL (15 pasos)
+scripts/run_distributed_inside.sh    ← ejecutado dentro de spark-client
+scripts/verify_cluster.py            ← valida 2 DataNodes + 2 Workers ALIVE
+```
+
+Docker:
+
+```text
+docker/Dockerfile                    ← imagen única para todos los servicios
+docker/hadoop/core-site.xml          ← fs.defaultFS=hdfs://namenode:9000
+docker/hadoop/hdfs-site.xml          ← dfs.replication=2
+docker/scripts/entrypoint.sh         ← switch por SERVICE_ROLE
+docker-compose.yml                   ← 7 servicios + healthchecks
+```
+
+Tests:
+
+```text
+tests/test_train_compare_models.py   ← 28 pruebas sintéticas
+tests/test_clean_to_parquet.py
+tests/test_xlsm_utils.py
 ```
 
 Documentación generada:

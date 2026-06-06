@@ -28,28 +28,45 @@ El dataset disponible es una fotografía de cartera al corte de abril de 2026. P
 
 El procesamiento principal se realiza con Spark DataFrames, Spark SQL y MLlib. No se reemplaza el pipeline principal con pandas ni scikit-learn.
 
-## Arquitectura del proyecto
+## Arquitectura distribuida (7 contenedores Docker)
 
 ```text
 Excel .xlsm
-  -> TSV/CSV
-  -> HDFS raw
-  -> Spark DataFrames
+  -> TSV/CSV (local)
+  -> HDFS raw (replicación 2, 2 DataNodes)
+  -> Spark Standalone (2 Workers, spark://spark-master:7077)
   -> Perfilado y limpieza distribuida
   -> Parquet trusted
-  -> Spark SQL analytics
-  -> MLlib
-  -> Resultados y documentación
+  -> MLlib (LR + RF, pipelines separados)
+  -> PipelineModels en HDFS + Scores anonimizados
 ```
 
-Zonas propuestas en HDFS:
+| Contenedor | Rol | UI |
+|---|---|---|
+| namenode | HDFS NameNode | http://localhost:9870 |
+| datanode-1 | HDFS DataNode 1 | — |
+| datanode-2 | HDFS DataNode 2 | — |
+| spark-master | Spark Master | http://localhost:8080 |
+| spark-worker-1 | Spark Worker 1 | http://localhost:8081 |
+| spark-worker-2 | Spark Worker 2 | http://localhost:8082 |
+| spark-client | Driver spark-submit | http://localhost:4040 |
+
+## Comando oficial
+
+```bash
+bash scripts/run_distributed_cluster.sh
+```
+
+Pipeline de 15 pasos con run_id único. No usa `local[*]`.
+
+Zonas HDFS:
 
 ```text
-/proyecto_crediticio/raw
-/proyecto_crediticio/trusted
-/proyecto_crediticio/analytics
-/proyecto_crediticio/modelos
-/proyecto_crediticio/resultados
+/proyecto_crediticio/raw/                        ← TSV (replicación 2)
+/proyecto_crediticio/trusted/                    ← Parquet limpio
+/proyecto_crediticio/analytics/                  ← Perfilado y métricas
+/proyecto_crediticio/modelos/<run_id>/           ← PipelineModel LR y RF
+/proyecto_crediticio/resultados/scores/<run_id>/ ← Scores anonimizados
 ```
 
 ## Estructura del repositorio
@@ -71,6 +88,9 @@ Zonas propuestas en HDFS:
 │   ├── SETUP_LOCAL.md
 │   └── TARGET_VALIDATION_NOTES.md
 ├── scripts/
+│   ├── run_distributed_cluster.sh   ← COMANDO OFICIAL
+│   ├── run_distributed_inside.sh    ← ejecutado dentro de spark-client
+│   ├── verify_cluster.py            ← validación de cluster
 │   ├── docker_terminal_check.sh
 │   ├── run_hdfs_pipeline.sh
 │   ├── run_local_spark_pipeline.sh
@@ -86,6 +106,7 @@ Zonas propuestas en HDFS:
 │   ├── project_config.py
 │   └── xlsm_utils.py
 ├── tests/
+│   ├── test_train_compare_models.py ← 28 pruebas sintéticas (target, leakage, PII, pipelines)
 │   ├── test_clean_to_parquet.py
 │   └── test_xlsm_utils.py
 ├── .gitignore

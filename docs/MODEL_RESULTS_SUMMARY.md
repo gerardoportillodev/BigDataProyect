@@ -1,8 +1,22 @@
 # Resultados del experimento de modelado
 
-Fecha de ejecución: 2026-06-06.
+> **IMPORTANTE:** Este documento será actualizado con métricas oficiales tras ejecutar el pipeline distribuido completo.
+> Las métricas previas fueron eliminadas porque no tienen un `run_id` generado por el pipeline oficial.
+> Ejecuta `bash scripts/run_distributed_cluster.sh` para obtener el `run_id` oficial y poblar este documento.
 
-Este experimento compara Regresión Logística y Random Forest con MLlib sobre el mismo dataset, mismo split y mismo target experimental. Los resultados corresponden a una clasificación de riesgo al corte, no a predicción futura.
+---
+
+## Arquitectura de la corrida oficial
+
+| Componente | Detalle |
+|---|---|
+| Contenedores | 7 (namenode, datanode-1, datanode-2, spark-master, spark-worker-1, spark-worker-2, spark-client) |
+| HDFS DataNodes | 2 |
+| Spark Workers | 2 (ALIVE, Standalone) |
+| Replicación HDFS | 2 |
+| Spark Master URL | `spark://spark-master:7077` |
+| Executors por corrida | hasta 4 cores totales (1 core / 1 g por executor) |
+| Driver | spark-client (accesible desde ambos workers) |
 
 ## Target experimental
 
@@ -12,65 +26,81 @@ Este experimento compara Regresión Logística y Random Forest con MLlib sobre e
 NumeroDiasMora >= 30 OR ValorMoraTotal > 0
 ```
 
-Se excluyeron registros con `NumeroDiasMora = 999` porque el perfilado mostró que es un código especial pendiente de interpretación de negocio.
+Se excluyen registros con `NumeroDiasMora = 999` (código especial pendiente de validación de negocio).
+
+Alcance: **clasificación al corte** — no predicción futura.
+
+## Run ID oficial
+
+```
+# Se asignará automáticamente por run_distributed_cluster.sh con formato:
+# official_YYYYMMDDTHHMMSSZ
+# Ejemplo: official_20260606T150000Z
+```
+
+El `run_id` se guarda en:
+
+```
+data/results/cluster_evidence/run_id.txt
+```
 
 ## Universo de modelado
 
-| Concepto | Valor |
-|---|---:|
-| Registros activos elegibles | 929,820 |
-| Entrenamiento | 650,462 |
-| Prueba | 279,358 |
-| Clase 0 | 782,476 |
-| Clase 1 | 147,344 |
-| Porcentaje clase 1 | 15.85 % |
+> Pendiente de corrida oficial.
 
 ## Métricas
 
-| Modelo | Accuracy | Precision clase positiva | Recall clase positiva | F1 clase positiva | AUC-ROC | AUC-PR |
-|---|---:|---:|---:|---:|---:|---:|
-| Regresión Logística | 0.9391 | 0.7981 | 0.8259 | 0.8117 | 0.9442 | 0.8822 |
-| Random Forest | 0.9752 | 0.9814 | 0.8600 | 0.9167 | 0.9850 | 0.9610 |
+> Pendiente de corrida oficial.
+
+| Modelo | run_id | Accuracy | Precision+ | Recall+ | F1+ | AUC-ROC | AUC-PR | TN | FP | FN | TP |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| logistic_regression | — | — | — | — | — | — | — | — | — | — | — |
+| random_forest | — | — | — | — | — | — | — | — | — | — | — |
+
+## Saldo expuesto
+
+| Modelo | Saldo FN (riesgo no detectado) | Saldo FP (falsa alarma) |
+|---|---:|---:|
+| logistic_regression | — | — |
+| random_forest | — | — |
 
 ## Matriz de confusión
 
-### Regresión Logística
+> Pendiente de corrida oficial.
 
-| Real | Predicción | Casos |
-|---:|---:|---:|
-| 0 | 0 | 225,685 |
-| 0 | 1 | 9,276 |
-| 1 | 0 | 7,731 |
-| 1 | 1 | 36,666 |
+## Importancia de variables (Random Forest)
 
-### Random Forest
+> Pendiente de corrida oficial. Se guarda en:
+> `hdfs:///proyecto_crediticio/analytics/model_experiment/feature_diagnostics`
 
-| Real | Predicción | Casos |
-|---:|---:|---:|
-| 0 | 0 | 234,239 |
-| 0 | 1 | 722 |
-| 1 | 0 | 6,215 |
-| 1 | 1 | 38,182 |
+## Coeficientes (Regresión Logística)
 
-## Interpretación
+> Pendiente de corrida oficial.
 
-Random Forest obtiene el mejor desempeño general en este escenario experimental. Su mayor ventaja está en precisión positiva, F1 positivo, AUC-ROC y AUC-PR. Esto sugiere que captura relaciones no lineales e interacciones entre variables mejor que Regresión Logística.
+## Interpretación empresarial
 
-Regresión Logística sigue siendo útil como línea base por su interpretabilidad, estabilidad y menor complejidad. Sin embargo, bajo esta regla experimental, genera más falsos positivos que Random Forest.
+Random Forest captura relaciones no lineales e interacciones entre variables.
+Regresión Logística sirve como línea base interpretable y estable.
+
+En clasificación crediticia al corte:
+- **Recall positivo alto** → menos créditos en mora real pasan desapercibidos.
+- **Precision positiva alta** → menos alertas falsas sobre créditos sanos.
+- **AUC-ROC/AUC-PR** → robustez en umbrales.
 
 ## Cautelas metodológicas
 
-- El target sigue pendiente de validación de negocio.
-- La variable `NumeroDiasMora = 999` fue excluida del experimento por posible código especial.
-- No se usaron como predictoras las variables empleadas o candidatas para construir el target.
-- No se usaron identificadores ni datos personales.
-- Los resultados no deben presentarse como predicción futura, porque solo existe una fotografía al corte de abril de 2026.
+- Target pendiente de validación de negocio.
+- `NumeroDiasMora = 999` excluido — código especial sin interpretación confirmada.
+- No se usan variables de leakage (mora, Estado, SubEstado, Calificacion) como predictoras.
+- No se usan PII ni identificadores.
+- Alcance: clasificación al corte de abril 2026 — no predicción dinámica.
+- Nulos numéricos manejados con `Imputer(strategy="median")` — no reemplazados por cero.
+- StandardScaler aplicado únicamente a Regresión Logística.
+- Mismo split y seed para ambos modelos (`SEED = 20260430`, `test_size = 0.30`).
 
-## Siguiente paso
+## Siguientes pasos
 
-Antes de cerrar el informe final se recomienda validar con negocio o documentación institucional:
-
-1. Significado de `NumeroDiasMora = 999`.
-2. Significado operativo de `SubEstado = CAS`, `MOR` y `CJU`.
-3. Orden y semántica de `Calificacion` desde `A1` hasta `E`.
-4. Si `ValorMoraTotal > 0` debe tener el mismo peso que `NumeroDiasMora >= 30` en la etiqueta.
+1. Ejecutar `bash scripts/run_distributed_cluster.sh`.
+2. Copiar `run_id` de `data/results/cluster_evidence/run_id.txt`.
+3. Poblar métricas desde `hdfs:///proyecto_crediticio/analytics/model_experiment/metrics`.
+4. Validar con negocio: significado de `NumeroDiasMora = 999`, `SubEstado`, y peso de `ValorMoraTotal`.

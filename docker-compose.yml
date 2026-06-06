@@ -14,6 +14,12 @@ services:
       - .:/workspace
       - hdfs_namenode:/hadoop/dfs/name
     networks: [bigdata_net]
+    healthcheck:
+      test: ["CMD", "hdfs", "dfsadmin", "-safemode", "get"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
 
   datanode-1:
     build:
@@ -23,7 +29,9 @@ services:
     hostname: datanode-1
     environment:
       SERVICE_ROLE: datanode
-    depends_on: [namenode]
+    depends_on:
+      namenode:
+        condition: service_healthy
     volumes:
       - .:/workspace
       - hdfs_datanode_1:/hadoop/dfs/data
@@ -37,7 +45,9 @@ services:
     hostname: datanode-2
     environment:
       SERVICE_ROLE: datanode
-    depends_on: [namenode]
+    depends_on:
+      namenode:
+        condition: service_healthy
     volumes:
       - .:/workspace
       - hdfs_datanode_2:/hadoop/dfs/data
@@ -58,6 +68,12 @@ services:
     volumes:
       - .:/workspace
     networks: [bigdata_net]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/json/"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
 
   spark-worker-1:
     build:
@@ -72,7 +88,9 @@ services:
       SPARK_WORKER_CORES: 2
       SPARK_WORKER_MEMORY: 2g
       SPARK_WORKER_WEBUI_PORT: 8081
-    depends_on: [spark-master]
+    depends_on:
+      spark-master:
+        condition: service_healthy
     ports:
       - "8081:8081"
     volumes:
@@ -91,10 +109,12 @@ services:
       SPARK_WORKER_HOSTNAME: spark-worker-2
       SPARK_WORKER_CORES: 2
       SPARK_WORKER_MEMORY: 2g
-      SPARK_WORKER_WEBUI_PORT: 8081
-    depends_on: [spark-master]
+      SPARK_WORKER_WEBUI_PORT: 8082
+    depends_on:
+      spark-master:
+        condition: service_healthy
     ports:
-      - "8082:8081"
+      - "8082:8082"
     volumes:
       - .:/workspace
     networks: [bigdata_net]
