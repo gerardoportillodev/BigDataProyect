@@ -1,503 +1,256 @@
-# BigDataProyect - Clasificación de Riesgo Crediticio con Spark y MLlib
+# Clasificación de Riesgo Crediticio con Big Data Distribuido
 
-Proyecto final de **Analítica y Tecnologías de Big Data** orientado a construir un flujo completo de Big Data para clasificar obligaciones financieras activas según riesgo crediticio al corte de abril de 2026.
+**Proyecto final — Analítica y Tecnologías de Big Data**
 
-La solución compara dos técnicas de clasificación sobre el mismo dataset:
+Sistema distribuido que procesa ~1 millón de obligaciones financieras y entrena dos modelos de Machine Learning (Regresión Logística y Random Forest) usando Apache Hadoop HDFS + Apache Spark sobre una arquitectura de **7 contenedores Docker**.
 
-- Regresión Logística.
-- Random Forest.
+> **Corrida oficial completada:** `official_20260606T191340Z`  
+> **Ganador:** Random Forest — AUC-ROC **98.1%**, Accuracy **97.3%**
 
-El enfoque corresponde a la **Opción 2 de la rúbrica**: dos técnicas con propósito similar aplicadas a un mismo dataset para resolver un solo caso de negocio y comparar resultados.
+---
 
 ## Caso de negocio
 
-Clasificar obligaciones financieras activas según señales de riesgo crediticio para apoyar la priorización de gestión preventiva, segmentación de cartera, asignación de recursos de cobranza y análisis de deterioro crediticio al corte.
+Clasificar obligaciones financieras activas al corte de abril 2026 según señales de riesgo crediticio, para apoyar la priorización de cobranza, segmentación de cartera y análisis de deterioro. El alcance es **clasificación al corte**, no predicción futura.
 
-El dataset disponible es una fotografía de cartera al corte de abril de 2026. Por esta razón, el alcance metodológico se presenta como **clasificación de riesgo crediticio al corte**, no como predicción futura de mora.
-
-## Tecnologías utilizadas
-
-- Python
-- PySpark
-- Apache Spark
-- Spark SQL
-- Spark MLlib
-- HDFS
-- Parquet
-- Docker
-
-El procesamiento principal se realiza con Spark DataFrames, Spark SQL y MLlib. No se reemplaza el pipeline principal con pandas ni scikit-learn.
-
-## Arquitectura distribuida (7 contenedores Docker)
-
-```text
-Excel .xlsm
-  -> TSV/CSV (local)
-  -> HDFS raw (replicación 2, 2 DataNodes)
-  -> Spark Standalone (2 Workers, spark://spark-master:7077)
-  -> Perfilado y limpieza distribuida
-  -> Parquet trusted
-  -> MLlib (LR + RF, pipelines separados)
-  -> PipelineModels en HDFS + Scores anonimizados
+**Target experimental:**
+```
+riesgo_crediticio_exp = 1  si  NumeroDiasMora >= 30  OR  ValorMoraTotal > 0
+riesgo_crediticio_exp = 0  en caso contrario
+(excluye NumeroDiasMora = 999 — código especial sin validación de negocio)
 ```
 
-| Contenedor | Rol | UI |
-|---|---|---|
-| namenode | HDFS NameNode | http://localhost:9870 |
-| datanode-1 | HDFS DataNode 1 | — |
-| datanode-2 | HDFS DataNode 2 | — |
-| spark-master | Spark Master | http://localhost:8080 |
-| spark-worker-1 | Spark Worker 1 | http://localhost:8081 |
-| spark-worker-2 | Spark Worker 2 | http://localhost:8082 |
-| spark-client | Driver spark-submit | http://localhost:4040 |
+---
 
-## Comando oficial
+## Resultados Oficiales
+
+**Run ID:** `official_20260606T191340Z` — 279,416 registros en prueba
+
+| Modelo | Accuracy | AUC-ROC | AUC-PR | Precisión+ | Recall+ | F1+ |
+|---|---:|---:|---:|---:|---:|---:|
+| Regresión Logística | 93.9% | 94.4% | 88.2% | 79.8% | 82.5% | 81.1% |
+| **Random Forest** ✅ | **97.3%** | **98.1%** | **95.5%** | **98.8%** | **84.0%** | **90.8%** |
+
+### Matrices de confusión
+
+**Regresión Logística**
+
+|  | Pred. Sano | Pred. Riesgo |
+|---|---:|---:|
+| **Real Sano** | 226,065 ✅ | 9,218 ⚠️ |
+| **Real Riesgo** | 7,729 ❌ | 36,404 ✅ |
+
+**Random Forest**
+
+|  | Pred. Sano | Pred. Riesgo |
+|---|---:|---:|
+| **Real Sano** | 234,847 ✅ | 436 ⚠️ |
+| **Real Riesgo** | 7,055 ❌ | 37,078 ✅ |
+
+### Saldo expuesto
+
+| Modelo | Saldo FN — riesgo no detectado | Saldo FP — falsa alarma |
+|---|---:|---:|
+| Regresión Logística | $25,948,778 | $13,994,277 |
+| **Random Forest** | $26,620,081 | **$606,510** |
+
+Random Forest reduce las falsas alarmas en **96%** ($13.4M menos), evitando rechazar créditos sanos innecesariamente.
+
+---
+
+## Arquitectura — 7 Contenedores Docker
+
+```
+┌─────────────────── Red: bigdata_net ───────────────────────────────┐
+│                                                                     │
+│  ┌──────────────── HDFS (Almacenamiento) ─────────────────────┐    │
+│  │  namenode       → Directorio de bloques       :9870        │    │
+│  │  datanode-1     → Almacena bloques  ─┐                     │    │
+│  │  datanode-2     → Réplica de bloques ┘  replicación 2x     │    │
+│  └────────────────────────────────────────────────────────────┘    │
+│                                                                     │
+│  ┌──────────────── Spark (Procesamiento) ─────────────────────┐    │
+│  │  spark-master   → Coordinador del clúster     :8080 :7077  │    │
+│  │  spark-worker-1 → 2 cores · 2 GB RAM          :8081        │    │
+│  │  spark-worker-2 → 2 cores · 2 GB RAM          :8082        │    │
+│  └────────────────────────────────────────────────────────────┘    │
+│                                                                     │
+│  spark-client  → Ejecuta el pipeline (spark-submit)  :4040         │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### ¿Por qué 7 contenedores y no uno solo?
+
+| Contenedor | Rol | Por qué es necesario |
+|---|---|---|
+| **namenode** | Directorio HDFS | Registra dónde vive cada bloque de datos. Sin él no hay sistema de archivos distribuido. |
+| **datanode-1** | Almacén de bloques | Guarda físicamente los datos. Con dos nodos se garantiza que si uno falla, el otro tiene la copia. |
+| **datanode-2** | Réplica de bloques | Hace posible la replicación 2x — la misma información en dos lugares distintos simultáneamente. |
+| **spark-master** | Coordinador Spark | Recibe los jobs y decide qué worker ejecuta qué tarea. Es el "supervisor" del procesamiento. |
+| **spark-worker-1** | Ejecutor de tareas | Realiza los cálculos reales en paralelo. Más workers = más velocidad de procesamiento. |
+| **spark-worker-2** | Ejecutor de tareas | Trabaja en paralelo con worker-1. Juntos procesan el millón de registros en fracciones del tiempo. |
+| **spark-client** | Driver del pipeline | Orquesta los 15 pasos: envía instrucciones al clúster, espera resultados, guarda en HDFS. |
+
+---
+
+## Pipeline de 15 Pasos
 
 ```bash
 bash scripts/run_distributed_cluster.sh
 ```
 
-Pipeline de 15 pasos con run_id único. No usa `local[*]`.
+| # | Paso | Dónde corre | Qué hace |
+|---|---|---|---|
+| 1 | Exportar XLSM → TSV | Local · Python | Convierte el Excel con macros a texto plano compatible con sistemas distribuidos |
+| 2 | Build imágenes Docker | Docker | Construye la imagen con Hadoop 3.3.6 + Spark 3.5.3 + Python 3.11 |
+| 3 | Levantar clúster | Docker Compose | Inicia los 7 contenedores en red privada `bigdata_net` |
+| 4 | Esperar NameNode | healthcheck | Valida que HDFS responde en `:9870` antes de continuar |
+| 5 | Esperar 2 DataNodes | `dfsadmin -report` | Confirma que ambos DataNodes están registrados y vivos |
+| 6 | Esperar 2 Workers ALIVE | Spark REST API | Verifica que ambos workers están activos en el Master |
+| 7 | Crear zonas HDFS | `hdfs dfs -mkdir` | Crea la estructura de carpetas: raw, trusted, analytics, modelos, resultados |
+| 8 | Cargar TSV → HDFS | `hdfs dfs -put` | Sube los datos crudos con replicación automática en ambos DataNodes |
+| 9 | Perfilado distribuido | `spark-submit` | Analiza nulos, tipos, distribuciones y duplicados del dataset crudo |
+| 10 | Zona Trusted (Parquet) | `spark-submit` | Limpia, castea tipos, crea variables derivadas, guarda en Parquet comprimido |
+| 11 | Validación de calidad | `spark-submit` | Verifica integridad: nulls, rangos, target válido, exclusión de 999 |
+| 12 | Entrenar LR | `spark-submit` · MLlib | Regresión Logística con StandardScaler + Imputer(median) distribuido en workers |
+| 13 | Entrenar RF | `spark-submit` · MLlib | Random Forest (20 árboles, profundidad 6) distribuido en workers |
+| 14 | Evidencia post-ejecución | HDFS + Spark API | Guarda reporte del clúster, árbol HDFS y estado de Spark Master |
+| 15 | Resumen y Run ID | consola | Imprime Run ID oficial y URLs de las interfaces web |
 
-Zonas HDFS:
-
-```text
-/proyecto_crediticio/raw/                        ← TSV (replicación 2)
+**Zonas HDFS al finalizar:**
+```
+/proyecto_crediticio/raw/                        ← TSV original (189 MB · replicación 2x)
 /proyecto_crediticio/trusted/                    ← Parquet limpio
-/proyecto_crediticio/analytics/                  ← Perfilado y métricas
-/proyecto_crediticio/modelos/<run_id>/           ← PipelineModel LR y RF
-/proyecto_crediticio/resultados/scores/<run_id>/ ← Scores anonimizados
+/proyecto_crediticio/analytics/                  ← Perfilado, métricas, confusion matrix
+/proyecto_crediticio/modelos/<run_id>/           ← PipelineModel LR y RF persistidos
+/proyecto_crediticio/resultados/scores/<run_id>/ ← Scores anonimizados (SHA-256)
 ```
 
-## Estructura del repositorio
+---
 
-```text
+## Demo Rápida (sin reentrenar)
+
+El clúster y los modelos ya están entrenados y corriendo. Para demostrar el sistema en vivo:
+
+### 1. Mostrar los 7 contenedores activos
+```bash
+docker compose ps
+```
+
+### 2. Abrir las interfaces web en el navegador
+| UI | URL | Qué muestra |
+|---|---|---|
+| HDFS NameNode | http://localhost:9870 | DataNodes vivos, bloques, replicación |
+| Spark Master | http://localhost:8080 | Workers ALIVE, apps completadas |
+| Spark Worker 1 | http://localhost:8081 | Recursos y tareas ejecutadas |
+| Spark Worker 2 | http://localhost:8082 | Recursos y tareas ejecutadas |
+
+### 3. Verificar el clúster desde consola
+```bash
+# Estado de HDFS — 2 DataNodes, bloques replicados
+docker compose exec -T namenode hdfs dfsadmin -report
+
+# Árbol de archivos en HDFS
+docker compose exec -T spark-client hdfs dfs -ls -R /proyecto_crediticio
+
+# Ver métricas reales de los modelos
+docker compose exec -T spark-client bash -c \
+  "hdfs dfs -cat /proyecto_crediticio/analytics/model_experiment/metrics/*.csv"
+```
+
+### 4. Ver los resultados directamente
+```bash
+# Integridad del archivo en HDFS (replicación 2x confirmada)
+docker compose exec -T namenode \
+  hdfs fsck /proyecto_crediticio/raw/creditos_raw.tsv -files -blocks
+```
+
+### 5. Páginas de evidencia (abrir en navegador)
+```bash
+open docs/diagrama_arquitectura.html   # Diagrama visual del sistema
+open docs/evidencia_ejecucion.html     # Evidencia real con métricas
+```
+
+---
+
+## Datos del Dataset
+
+| Métrica | Valor |
+|---|---:|
+| Registros totales | 1,006,881 |
+| Columnas originales | 32 |
+| Obligaciones activas | 973,350 |
+| Obligaciones cerradas | 33,531 |
+| Saldo total activo | $3,173,079,995.81 |
+| Mora total activa | $30,876,513.15 |
+| Registros modelados | ~929,820 |
+| Registros en prueba | 279,416 |
+| Clase positiva (riesgo) | ~15.85% |
+
+---
+
+## Tecnologías
+
+| Tecnología | Versión | Rol |
+|---|---|---|
+| Apache Hadoop HDFS | 3.3.6 | Almacenamiento distribuido con replicación |
+| Apache Spark | 3.5.3 | Procesamiento distribuido y MLlib |
+| PySpark MLlib | 3.5.3 | Pipelines de ML: StringIndexer, Imputer, VectorAssembler, StandardScaler, LR, RF |
+| Docker / Compose | 29.x / 5.x | Orquestación de los 7 contenedores |
+| Python | 3.11 | Scripts de procesamiento y tests |
+| Parquet + Snappy | — | Formato columnar comprimido para zona trusted |
+
+---
+
+## Estructura del Repositorio
+
+```
 .
 ├── docker/
-│   ├── Dockerfile
+│   ├── Dockerfile                        ← Hadoop + Spark + Python en una imagen
 │   ├── hadoop/
-│   ├── scripts/
-│   └── spark/
+│   │   ├── core-site.xml                 ← fs.defaultFS = hdfs://namenode:9000
+│   │   └── hdfs-site.xml                 ← replication=2, sin rpc-address problemático
+│   └── scripts/entrypoint.sh             ← Lógica de arranque por SERVICE_ROLE
 ├── docs/
-│   ├── DATA_DICTIONARY.md
-│   ├── FINAL_TECHNICAL_REPORT.md
-│   ├── MODELING_EXPERIMENT_NOTES.md
-│   ├── MODEL_RESULTS_SUMMARY.md
-│   ├── PROJECT_CONTEXT.md
+│   ├── MODEL_RESULTS_SUMMARY.md          ← Métricas oficiales completas
+│   ├── diagrama_arquitectura.html        ← Diagrama visual (abrir en navegador)
+│   ├── evidencia_ejecucion.html          ← Evidencia real del clúster
 │   ├── RUNBOOK_INGESTA_SPARK.md
-│   ├── SETUP_LOCAL.md
-│   └── TARGET_VALIDATION_NOTES.md
+│   └── ...
 ├── scripts/
-│   ├── run_distributed_cluster.sh   ← COMANDO OFICIAL
-│   ├── run_distributed_inside.sh    ← ejecutado dentro de spark-client
-│   ├── verify_cluster.py            ← validación de cluster
-│   ├── docker_terminal_check.sh
-│   ├── run_hdfs_pipeline.sh
-│   ├── run_local_spark_pipeline.sh
-│   ├── run_model_experiment.sh
-│   └── use_local_spark.sh
+│   ├── run_distributed_cluster.sh        ← COMANDO OFICIAL (15 pasos)
+│   ├── run_distributed_inside.sh         ← Ejecutado dentro de spark-client
+│   └── verify_cluster.py                 ← Validación de DataNodes y Workers
 ├── src/
-│   ├── 00_inspect_xlsm.py
-│   ├── 00_export_xlsm_to_tsv.py
-│   ├── 01_ingest_profile.py
-│   ├── 02_clean_to_parquet.py
-│   ├── 03_validate_quality_target.py
-│   ├── 04_train_compare_models.py
-│   ├── project_config.py
-│   └── xlsm_utils.py
+│   ├── 00_export_xlsm_to_tsv.py          ← Paso 1: Excel → TSV
+│   ├── 01_ingest_profile.py              ← Paso 9: Perfilado distribuido
+│   ├── 02_clean_to_parquet.py            ← Paso 10: Zona trusted
+│   ├── 03_validate_quality_target.py     ← Paso 11: Validación calidad
+│   └── 04_train_compare_models.py        ← Pasos 12-13: LR + RF
 ├── tests/
-│   ├── test_train_compare_models.py ← 28 pruebas sintéticas (target, leakage, PII, pipelines)
-│   ├── test_clean_to_parquet.py
-│   └── test_xlsm_utils.py
-├── .gitignore
-├── docker-compose.yml
-├── README.md
-└── requirements.txt
+│   └── test_train_compare_models.py      ← 28 pruebas sintéticas (sin PII)
+├── docker-compose.yml                    ← 7 servicios: namenode, 2 datanodes, master, 2 workers, client
+└── README.md
 ```
 
-## Datos requeridos
+---
 
-El archivo real de datos debe colocarse localmente en:
+## Privacidad y Seguridad
 
-```text
-data/raw/ConvertidorEstructura - DATA.xlsm
-```
+- El dataset contiene información personal y **no se sube a GitHub** (`.gitignore` excluye `data/`)
+- Los scores guardados usan `record_key` generado con **SHA-256** — imposible revertir a datos personales
+- Columnas excluidas del modelo: `NombreCompleto`, `Identificacion6`, `Identificacion2`, `NumeroDeObligacion`
+- Las pruebas usan datos sintéticos sin PII
 
-Ese archivo no se incluye en GitHub porque contiene información sensible. También se excluyen archivos `.xlsm`, `.xlsx`, `.csv`, `.tsv`, `.parquet` y toda la carpeta `data/`.
+---
 
-## Protección de datos
+## Cautelas Metodológicas
 
-El dataset contiene información personal. No se imprimen ni se suben a GitHub las siguientes columnas:
-
-- `NombreCompleto`
-- `Identificacion6`
-- `Identificacion2`
-- `NumeroDeObligacion`
-
-Las pruebas usan datos sintéticos anonimizados.
-
-## Instalación local
-
-Desde la raíz del proyecto:
-
-```bash
-cd ~/Downloads/proyecto_big_data_riesgo_crediticio
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-El proyecto usa Java 17 para Spark. En el ambiente local se configuró mediante:
-
-```bash
-source scripts/use_local_spark.sh
-```
-
-Validar ambiente:
-
-```bash
-python --version
-python -c "import pyspark; print(pyspark.__version__)"
-python -m pytest -q
-```
-
-Resultado validado:
-
-```text
-2 passed
-```
-
-## Ejecución paso a paso en consola
-
-### 1. Verificar Docker
-
-```bash
-cd ~/Downloads/proyecto_big_data_riesgo_crediticio
-bash scripts/docker_terminal_check.sh
-```
-
-Resultado obtenido:
-
-```text
-Docker:
-  Client=29.1.5 Server=29.1.5
-Contenedores activos:
-CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES
-Compose:
-Docker Compose version v5.0.1
-```
-
-### 2. Activar ambiente Spark local
-
-```bash
-cd ~/Downloads/proyecto_big_data_riesgo_crediticio
-source scripts/use_local_spark.sh
-```
-
-### 3. Inspeccionar el Excel sin cargar toda la hoja
-
-```bash
-python src/00_inspect_xlsm.py
-```
-
-Resultado obtenido:
-
-```text
-Hojas: ['Sheet1']
-Dimension: A1:AF1006882
-Filas incluyendo encabezado: 1006882
-Columnas: 32
-Encabezados coinciden: True
-```
-
-### 4. Exportar Excel a TSV
-
-```bash
-python src/00_export_xlsm_to_tsv.py \
-  --input "data/raw/ConvertidorEstructura - DATA.xlsm" \
-  --output "data/raw/creditos_raw.tsv"
-```
-
-Resultado obtenido:
-
-```text
-TSV generado: data/raw/creditos_raw.tsv
-Filas escritas incluyendo encabezado: 1006882
-```
-
-### 5. Ejecutar perfilado con Spark
-
-```bash
-python src/01_ingest_profile.py \
-  --input data/raw/creditos_raw.tsv \
-  --output data/results/profiling_raw
-```
-
-Este paso genera métricas de registros, columnas, particiones, nulos, duplicados, cardinalidad categórica y distribución de `Estado`, `SubEstado` y `Calificacion`.
-
-### 6. Construir zona trusted en Parquet
-
-```bash
-python src/02_clean_to_parquet.py \
-  --input data/raw/creditos_raw.tsv \
-  --output data/trusted/obligaciones
-```
-
-Resultado validado:
-
-```text
-trusted_rows= 1006881
-trusted_columns= 39
-has_riesgo_crediticio= False
-```
-
-Variables derivadas creadas:
-
-- `fecha_corte`
-- `credito_cerrado`
-- `edad_cliente`
-- `antiguedad_credito_meses`
-- `meses_hasta_vencimiento`
-- `ratio_utilizacion`
-- `ratio_cuota_saldo`
-
-### 7. Validar calidad y señales candidatas del target
-
-```bash
-python src/03_validate_quality_target.py \
-  --input data/trusted/obligaciones \
-  --output data/analytics/target_validation
-```
-
-Este paso genera agregados seguros para analizar activos vs cerrados, distribución de mora, relación entre calificación y mora, valores especiales como `NumeroDiasMora = 999` y controles de calidad.
-
-### 8. Ejecutar pipeline local completo
-
-```bash
-bash scripts/run_local_spark_pipeline.sh
-```
-
-Resultado obtenido:
-
-```text
-trusted_rows= 1006881
-trusted_columns= 39
-has_riesgo_crediticio= False
-Pipeline local Spark completado.
-```
-
-### 9. Entrenar y comparar modelos MLlib
-
-```bash
-bash scripts/run_model_experiment.sh
-```
-
-Comando equivalente:
-
-```bash
-SPARK_LOCAL_IP=127.0.0.1 python src/04_train_compare_models.py \
-  --input data/trusted/obligaciones \
-  --output data/results/model_experiment \
-  --rf-trees 40 \
-  --lr-max-iter 30
-```
-
-## Ejecución completa con Docker, HDFS y Spark
-
-El proyecto incluye un entorno Docker reproducible con Hadoop HDFS y Spark. Este flujo levanta un contenedor real, crea las zonas HDFS, carga el TSV a HDFS y ejecuta los scripts con `spark-submit` leyendo desde `hdfs:///...`.
-
-```bash
-cd ~/Downloads/proyecto_big_data_riesgo_crediticio
-bash scripts/run_hdfs_pipeline.sh
-```
-
-Al finalizar, Docker debe mostrar un contenedor activo:
-
-```bash
-docker ps
-```
-
-El NameNode queda disponible en:
-
-```text
-http://localhost:9870
-```
-
-El script ejecuta estas fases:
-
-1. Construye la imagen Docker `bigdata`.
-2. Levanta el contenedor `bigdata_riesgo_crediticio`.
-3. Inicia NameNode y DataNode.
-4. Crea zonas HDFS en `/proyecto_crediticio`.
-5. Sube `data/raw/creditos_raw.tsv` a HDFS.
-6. Ejecuta perfilado raw con Spark.
-7. Construye Parquet trusted en HDFS.
-8. Genera analítica de validación del target.
-9. Entrena Regresión Logística y Random Forest con MLlib.
-10. Muestra tamaños de salidas en HDFS.
-
-Resultado validado en HDFS:
-
-```text
-/proyecto_crediticio/raw/creditos_raw.tsv                 189.0 M
-/proyecto_crediticio/trusted/obligaciones                  69.0 M
-/proyecto_crediticio/analytics/target_validation           52.9 K
-/proyecto_crediticio/resultados/model_experiment             971 B
-/proyecto_crediticio/resultados/profiling_raw               1.3 K
-```
-
-## Ejecución en HDFS/Spark tipo clase
-
-Cuando se use el contenedor Hadoop/Spark de clase, el flujo esperado es:
-
-```bash
-docker compose up -d
-docker ps
-```
-
-Crear zonas HDFS:
-
-```bash
-hdfs dfs -mkdir -p /proyecto_crediticio/raw
-hdfs dfs -mkdir -p /proyecto_crediticio/trusted
-hdfs dfs -mkdir -p /proyecto_crediticio/analytics
-hdfs dfs -mkdir -p /proyecto_crediticio/modelos
-hdfs dfs -mkdir -p /proyecto_crediticio/resultados
-```
-
-Subir archivo raw:
-
-```bash
-hdfs dfs -put -f data/raw/creditos_raw.tsv /proyecto_crediticio/raw/creditos_raw.tsv
-hdfs dfs -ls -h /proyecto_crediticio/raw
-```
-
-Ejecutar scripts con `spark-submit`:
-
-```bash
-spark-submit src/01_ingest_profile.py \
-  --input hdfs:///proyecto_crediticio/raw/creditos_raw.tsv \
-  --output hdfs:///proyecto_crediticio/resultados/profiling_raw
-
-spark-submit src/02_clean_to_parquet.py \
-  --input hdfs:///proyecto_crediticio/raw/creditos_raw.tsv \
-  --output hdfs:///proyecto_crediticio/trusted/obligaciones
-
-spark-submit src/03_validate_quality_target.py \
-  --input hdfs:///proyecto_crediticio/trusted/obligaciones \
-  --output hdfs:///proyecto_crediticio/analytics/target_validation
-
-spark-submit src/04_train_compare_models.py \
-  --input hdfs:///proyecto_crediticio/trusted/obligaciones \
-  --output hdfs:///proyecto_crediticio/resultados/model_experiment \
-  --rf-trees 40 \
-  --lr-max-iter 30
-```
-
-Verificar salidas:
-
-```bash
-hdfs dfs -du -h /proyecto_crediticio/resultados
-hdfs dfs -du -h /proyecto_crediticio/trusted
-hdfs dfs -du -h /proyecto_crediticio/analytics
-```
-
-## Resultados obtenidos
-
-### Perfilado inicial
-
-- Registros procesados: 1,006,881.
-- Columnas: 32.
-- Particiones Spark iniciales: 8.
-- Duplicados agregados detectados: 284.
-- `Estado`: `VIG` 973,350; `CAN` 33,531.
-- `SubEstado`: `VIG` 755,516; `CAS` 191,266; `VOL` 33,531; `MOR` 26,122; `CJU` 446.
-- `Calificacion`: `A1` 742,368; `E` 201,243; `A2` 26,157; `B` 13,033; `C1` 8,420; `C2` 7,373; `D1` 4,438; `D2` 3,848.
-
-### Universo activo
-
-Regla utilizada:
-
-```text
-Credito cerrado: FechaDeCancelacion <= 2026-04-30
-Credito activo: FechaDeCancelacion nula o posterior a 2026-04-30
-```
-
-Resultado:
-
-- Obligaciones activas: 973,350.
-- Obligaciones cerradas: 33,531.
-- Saldo total en activas: 3,173,079,995.81.
-- Mora total en activas: 30,876,513.15.
-
-### Target experimental
-
-Se creó `riesgo_crediticio_exp` como target experimental:
-
-```text
-1 si NumeroDiasMora >= 30 OR ValorMoraTotal > 0
-0 en caso contrario
-excluyendo NumeroDiasMora = 999
-```
-
-`NumeroDiasMora = 999` aparece 43,530 veces y se trató como código especial pendiente de validación de negocio.
-
-### Dataset de modelado
-
-- Total modelado: 929,820 registros.
-- Entrenamiento: 650,462 registros.
-- Prueba: 279,358 registros.
-- Clase 0: 782,476 registros (84.15 %).
-- Clase 1: 147,344 registros (15.85 %).
-
-### Comparación de modelos
-
-| Modelo | Accuracy | Precision positiva | Recall positivo | F1 positivo | AUC-ROC | AUC-PR |
-|---|---:|---:|---:|---:|---:|---:|
-| Regresión Logística | 0.9391 | 0.7981 | 0.8259 | 0.8117 | 0.9442 | 0.8822 |
-| Random Forest | 0.9740 | 0.9857 | 0.8490 | 0.9122 | 0.9832 | 0.9580 |
-
-Matriz de confusión de Regresión Logística:
-
-| Real | Predicción | Casos |
-|---:|---:|---:|
-| 0 | 0 | 225,685 |
-| 0 | 1 | 9,276 |
-| 1 | 0 | 7,731 |
-| 1 | 1 | 36,666 |
-
-Matriz de confusión de Random Forest:
-
-| Real | Predicción | Casos |
-|---:|---:|---:|
-| 0 | 0 | 234,413 |
-| 0 | 1 | 548 |
-| 1 | 0 | 6,704 |
-| 1 | 1 | 37,693 |
-
-## Interpretación
-
-Random Forest obtuvo el mejor desempeño general en el escenario experimental. Presentó mayor accuracy, precisión positiva, recall positivo, F1, AUC-ROC y AUC-PR. La principal ventaja fue la reducción de falsos positivos y el aumento del F1 de la clase positiva.
-
-Regresión Logística funciona como línea base interpretable y robusta, pero generó más falsos positivos que Random Forest. Esto sugiere que las relaciones entre variables financieras, características del crédito y señales de riesgo pueden ser no lineales.
-
-## Limitaciones
-
-- El dataset representa una sola fotografía al corte de abril de 2026.
-- El resultado debe interpretarse como clasificación al corte, no predicción futura.
-- `NumeroDiasMora = 999` requiere validación de negocio.
-- `SubEstado = CAS`, `MOR` y `CJU` requieren interpretación documental.
-- La semántica completa de `Calificacion` debe confirmarse.
-- El target usado en modelado es experimental.
-
-## Documentación adicional
-
-- `docs/FINAL_TECHNICAL_REPORT.md`: reporte técnico consolidado.
-- `docs/RUNBOOK_INGESTA_SPARK.md`: comandos de ingesta, HDFS y Spark.
-- `docs/TARGET_VALIDATION_NOTES.md`: evidencia para validación del target.
-- `docs/MODEL_RESULTS_SUMMARY.md`: resumen de resultados de modelos.
-- `docs/DATA_DICTIONARY.md`: diccionario preliminar de datos.
-
-## Estado final
-
-El proyecto deja implementado y documentado el ciclo completo de Big Data: inspección segura del Excel, exportación a TSV, procesamiento con Spark, construcción de Parquet trusted, validación de target, entrenamiento MLlib, evaluación comparativa y documentación reproducible.
+- Target pendiente de validación de negocio
+- `NumeroDiasMora = 999` excluido — código especial sin interpretación confirmada (43,530 registros)
+- Variables de leakage excluidas del modelo: `Estado`, `SubEstado`, `Calificacion`, `NumeroDiasMora`, `ValorMoraTotal`
+- `Imputer(strategy="median")` para nulos numéricos — no reemplazados por cero
+- `StandardScaler` aplicado únicamente a Regresión Logística
+- Mismo split y semilla para ambos modelos (`SEED = 20260430`, `test_size = 0.30`)
+- Alcance: clasificación al corte de abril 2026 — no predicción dinámica
