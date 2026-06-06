@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Evidencia de Ejecución — Big Data Riesgo Crediticio</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f1923; color: #e0e6f0; padding: 30px; }
+
+  h1 { text-align: center; font-size: 20px; color: #7eb8f7; margin-bottom: 4px; }
+  .subtitle { text-align: center; font-size: 12px; color: #8a9bb5; margin-bottom: 28px; }
+
+  .section { margin-bottom: 24px; }
+  .section-title {
+    font-size: 12px; font-weight: 700; letter-spacing: 2px;
+    color: #7eb8f7; text-transform: uppercase; margin-bottom: 12px;
+    border-left: 3px solid #7eb8f7; padding-left: 10px;
+  }
+
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .kpi { background: #1a2535; border-radius: 10px; padding: 16px; text-align: center; border: 1px solid #2a3a52; }
+  .kpi .val { font-size: 32px; font-weight: 700; }
+  .kpi .lbl { font-size: 11px; color: #8a9bb5; margin-top: 4px; line-height: 1.4; }
+  .kpi.green .val { color: #4ac7a4; }
+  .kpi.blue .val  { color: #7eb8f7; }
+  .kpi.orange .val{ color: #f7a84a; }
+  .kpi.purple .val{ color: #b47ef7; }
+
+  .log-block {
+    background: #0a1018; border: 1px solid #2a3a52; border-radius: 10px;
+    padding: 16px; font-family: 'Courier New', monospace; font-size: 11.5px;
+    line-height: 1.7; overflow-x: auto;
+  }
+  .ok   { color: #4ac7a4; }
+  .info { color: #7eb8f7; }
+  .warn { color: #f7a84a; }
+  .dim  { color: #4a5a72; }
+  .bold { color: #e0e6f0; font-weight: 700; }
+  .purple { color: #b47ef7; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+  .ev-card { background: #1a2535; border-radius: 10px; padding: 16px; border: 1px solid #2a3a52; }
+  .ev-card h3 { font-size: 12px; color: #7eb8f7; margin-bottom: 10px; letter-spacing: 1px; text-transform: uppercase; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; color: #8a9bb5; padding: 6px 8px; border-bottom: 1px solid #2a3a52; font-weight: 600; }
+  td { padding: 7px 8px; border-bottom: 1px solid #1a2535; }
+  tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; }
+  .badge.ok     { background: #1a3530; color: #4ac7a4; }
+  .badge.run    { background: #1a2a3f; color: #7eb8f7; }
+  .badge.winner { background: #2a1a3f; color: #b47ef7; }
+
+  .model-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .model-card { border-radius: 12px; padding: 20px; }
+  .model-card.lr { background: #1a2535; border: 2px solid #7eb8f7; }
+  .model-card.rf { background: #1a2535; border: 2px solid #b47ef7; }
+  .model-title { font-size: 14px; font-weight: 700; margin-bottom: 14px; }
+  .model-card.lr .model-title { color: #7eb8f7; }
+  .model-card.rf .model-title { color: #b47ef7; }
+  .metric-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #2a3a52; font-size: 12px; }
+  .metric-row:last-child { border-bottom: none; }
+  .metric-name { color: #8a9bb5; }
+  .metric-val  { font-weight: 700; color: #e0e6f0; }
+  .metric-val.good { color: #4ac7a4; }
+  .metric-val.best { color: #b47ef7; }
+
+  .confusion { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .conf-cell { border-radius: 8px; padding: 10px; text-align: center; }
+  .conf-cell .val { font-size: 20px; font-weight: 700; }
+  .conf-cell .lbl { font-size: 10px; color: #8a9bb5; margin-top: 2px; }
+  .tn { background: #1a3530; }  .tn .val { color: #4ac7a4; }
+  .fp { background: #3f2a1a; }  .fp .val { color: #f7a84a; }
+  .fn { background: #3f1a1a; }  .fn .val { color: #e25e3e; }
+  .tp { background: #2a1a3f; }  .tp .val { color: #b47ef7; }
+
+  .timeline { position: relative; padding-left: 24px; }
+  .timeline::before { content: ''; position: absolute; left: 8px; top: 4px; bottom: 4px; width: 2px; background: #2a3a52; }
+  .tl-item { position: relative; margin-bottom: 10px; }
+  .tl-item::before { content: ''; position: absolute; left: -20px; top: 5px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid; }
+  .tl-item.done::before  { background: #4ac7a4; border-color: #4ac7a4; }
+  .tl-item.spark::before { background: #e25e3e; border-color: #e25e3e; }
+  .tl-item.hdfs::before  { background: #f7a84a; border-color: #f7a84a; }
+  .tl-item.ml::before    { background: #b47ef7; border-color: #b47ef7; }
+  .tl-label { font-size: 12px; font-weight: 700; color: #c8d8ee; }
+  .tl-time  { font-size: 10px; color: #8a9bb5; margin-top: 1px; }
+</style>
+</head>
+<body>
+
+<h1>Evidencia de Ejecución Real — Pipeline Distribuido</h1>
+<p class="subtitle">Run ID: <strong>official_20260606T191340Z</strong> &nbsp;·&nbsp; 6 de junio 2026 &nbsp;·&nbsp; 7 contenedores Docker &nbsp;·&nbsp; Hadoop 3.3.6 + Spark 3.5.3</p>
+
+<!-- KPIs -->
+<div class="kpi-grid">
+  <div class="kpi green"><div class="val">279,416</div><div class="lbl">Registros evaluados en el conjunto de prueba</div></div>
+  <div class="kpi purple"><div class="val">98.1%</div><div class="lbl">AUC-ROC del mejor modelo (Random Forest)</div></div>
+  <div class="kpi orange"><div class="val">2.0x</div><div class="lbl">Replicación HDFS — 0 bloques perdidos o corruptos</div></div>
+  <div class="kpi blue"><div class="val">89</div><div class="lbl">Bloques distribuidos entre los 2 DataNodes</div></div>
+</div>
+
+<!-- Comparación de modelos -->
+<div class="section">
+  <div class="section-title">Resultados Reales de los Modelos ML — Extraídos de HDFS</div>
+  <div class="model-compare">
+
+    <div class="model-card lr">
+      <div class="model-title">📈 Regresión Logística</div>
+      <div class="metric-row"><span class="metric-name">Accuracy</span><span class="metric-val good">93.9%</span></div>
+      <div class="metric-row"><span class="metric-name">AUC-ROC</span><span class="metric-val good">94.4%</span></div>
+      <div class="metric-row"><span class="metric-name">AUC-PR</span><span class="metric-val good">88.2%</span></div>
+      <div class="metric-row"><span class="metric-name">Precisión (+)</span><span class="metric-val good">79.8%</span></div>
+      <div class="metric-row"><span class="metric-name">Recall (+)</span><span class="metric-val good">82.5%</span></div>
+      <div class="metric-row"><span class="metric-name">F1 Score (+)</span><span class="metric-val good">81.1%</span></div>
+      <div class="metric-row"><span class="metric-name">Falsos negativos</span><span class="metric-val" style="color:#e25e3e;">7,729</span></div>
+      <div class="metric-row"><span class="metric-name">Saldo FN expuesto</span><span class="metric-val" style="color:#e25e3e;">$25.9M</span></div>
+      <div class="metric-row"><span class="metric-name">Falsos positivos</span><span class="metric-val" style="color:#f7a84a;">9,218</span></div>
+      <div class="metric-row"><span class="metric-name">Saldo FP expuesto</span><span class="metric-val" style="color:#f7a84a;">$14.0M</span></div>
+      <br>
+      <div style="font-size:11px;color:#8a9bb5;">Matriz de confusión:</div>
+      <div class="confusion">
+        <div class="conf-cell tn"><div class="val">226,065</div><div class="lbl">Verdaderos Negativos</div></div>
+        <div class="conf-cell fp"><div class="val">9,218</div><div class="lbl">Falsos Positivos</div></div>
+        <div class="conf-cell fn"><div class="val">7,729</div><div class="lbl">Falsos Negativos</div></div>
+        <div class="conf-cell tp"><div class="val">36,404</div><div class="lbl">Verdaderos Positivos</div></div>
+      </div>
+    </div>
+
+    <div class="model-card rf">
+      <div class="model-title">🌲 Random Forest &nbsp;<span class="badge winner">GANADOR</span></div>
+      <div class="metric-row"><span class="metric-name">Accuracy</span><span class="metric-val best">97.3%</span></div>
+      <div class="metric-row"><span class="metric-name">AUC-ROC</span><span class="metric-val best">98.1%</span></div>
+      <div class="metric-row"><span class="metric-name">AUC-PR</span><span class="metric-val best">95.5%</span></div>
+      <div class="metric-row"><span class="metric-name">Precisión (+)</span><span class="metric-val best">98.8%</span></div>
+      <div class="metric-row"><span class="metric-name">Recall (+)</span><span class="metric-val good">84.0%</span></div>
+      <div class="metric-row"><span class="metric-name">F1 Score (+)</span><span class="metric-val best">90.8%</span></div>
+      <div class="metric-row"><span class="metric-name">Falsos negativos</span><span class="metric-val" style="color:#e25e3e;">7,055</span></div>
+      <div class="metric-row"><span class="metric-name">Saldo FN expuesto</span><span class="metric-val" style="color:#e25e3e;">$26.6M</span></div>
+      <div class="metric-row"><span class="metric-name">Falsos positivos</span><span class="metric-val best">436</span></div>
+      <div class="metric-row"><span class="metric-name">Saldo FP expuesto</span><span class="metric-val best">$606K</span></div>
+      <br>
+      <div style="font-size:11px;color:#8a9bb5;">Matriz de confusión:</div>
+      <div class="confusion">
+        <div class="conf-cell tn"><div class="val">234,847</div><div class="lbl">Verdaderos Negativos</div></div>
+        <div class="conf-cell fp"><div class="val">436</div><div class="lbl">Falsos Positivos</div></div>
+        <div class="conf-cell fn"><div class="val">7,055</div><div class="lbl">Falsos Negativos</div></div>
+        <div class="conf-cell tp"><div class="val">37,078</div><div class="lbl">Verdaderos Positivos</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Infraestructura -->
+<div class="section">
+  <div class="section-title">Evidencia de Infraestructura Distribuida</div>
+  <div class="two-col">
+
+    <div class="ev-card">
+      <h3>🗄️ HDFS Post-Ejecución</h3>
+      <div class="log-block">
+<span class="bold">DFS Used:</span>            <span class="ok">623.76 MB</span>
+<span class="bold">Under replicated:</span>    <span class="ok">0 bloques</span>
+<span class="bold">Missing blocks:</span>      <span class="ok">0</span>
+<span class="bold">Corrupt blocks:</span>      <span class="ok">0</span>
+<span class="dim">──────────────────────────────</span>
+<span class="info">Live datanodes (2):</span>
+
+<span class="bold">DataNode 1:</span> 311.88 MB · <span class="ok">89 bloques</span>
+<span class="bold">DataNode 2:</span> 311.88 MB · <span class="ok">89 bloques</span>
+
+<span class="dim">→ Mismo número de bloques en ambos</span>
+<span class="dim">  DataNodes = replicación 2x perfecta</span>
+
+<span class="bold">Archivos en HDFS:</span>
+<span class="ok">/proyecto_crediticio/raw/</span>          <span class="dim">TSV original</span>
+<span class="ok">/proyecto_crediticio/trusted/</span>      <span class="dim">Parquet limpio</span>
+<span class="ok">/proyecto_crediticio/analytics/</span>    <span class="dim">Métricas + perfilado</span>
+<span class="ok">/proyecto_crediticio/modelos/</span>      <span class="dim">LR + RF guardados</span>
+<span class="ok">/proyecto_crediticio/resultados/</span>   <span class="dim">Scores anonimizados</span>
+      </div>
+    </div>
+
+    <div class="ev-card">
+      <h3>📋 Timeline Completo</h3>
+      <div class="timeline">
+        <div class="tl-item done"><div class="tl-label">Paso 1 — Exportar XLSM → TSV</div><div class="tl-time">✅ Archivo local generado</div></div>
+        <div class="tl-item done"><div class="tl-label">Pasos 2-3 — Build + Clúster 7 contenedores</div><div class="tl-time">✅ 19:13 UTC — todos los servicios activos</div></div>
+        <div class="tl-item hdfs"><div class="tl-label">Pasos 4-5 — NameNode + 2 DataNodes vivos</div><div class="tl-time">✅ Live datanodes: 2 confirmado</div></div>
+        <div class="tl-item spark"><div class="tl-label">Paso 6 — 2 Spark Workers ALIVE</div><div class="tl-time">✅ spark-worker-1 y spark-worker-2</div></div>
+        <div class="tl-item hdfs"><div class="tl-label">Pasos 7-8 — Zonas HDFS + Carga TSV</div><div class="tl-time">✅ 189 MB · replicación 2.0x · HEALTHY</div></div>
+        <div class="tl-item spark"><div class="tl-label">Paso 9 — Perfilado distribuido</div><div class="tl-time">✅ 19:15 UTC completado</div></div>
+        <div class="tl-item spark"><div class="tl-label">Paso 10 — Zona Trusted Parquet</div><div class="tl-time">✅ Guardado en HDFS</div></div>
+        <div class="tl-item spark"><div class="tl-label">Paso 11 — Validación de calidad</div><div class="tl-time">✅ Target validado · filtros aplicados</div></div>
+        <div class="tl-item ml"><div class="tl-label">Paso 12 — Regresión Logística entrenada</div><div class="tl-time">✅ 19:18 UTC · modelo guardado en HDFS</div></div>
+        <div class="tl-item ml"><div class="tl-label">Paso 13 — Random Forest entrenado</div><div class="tl-time">✅ 19:21 UTC · modelo guardado en HDFS</div></div>
+        <div class="tl-item ml"><div class="tl-label">Pasos 14-15 — Métricas + scores</div><div class="tl-time">✅ CSVs en HDFS · pipeline completado</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Contenedores -->
+<div class="section">
+  <div class="section-title">Los 7 Contenedores del Clúster</div>
+  <div class="ev-card">
+    <table>
+      <tr><th>Contenedor</th><th>Rol</th><th>Puerto</th><th>Estado</th></tr>
+      <tr><td>bigdata_namenode</td><td>HDFS NameNode — directorio de bloques</td><td>:9870</td><td><span class="badge ok">HEALTHY</span></td></tr>
+      <tr><td>bigdata_datanode_1</td><td>HDFS DataNode — 89 bloques · 311.88 MB</td><td>—</td><td><span class="badge ok">RUNNING</span></td></tr>
+      <tr><td>bigdata_datanode_2</td><td>HDFS DataNode — 89 bloques · 311.88 MB</td><td>—</td><td><span class="badge ok">RUNNING</span></td></tr>
+      <tr><td>bigdata_spark_master</td><td>Spark Master — coordinador</td><td>:8080 · :7077</td><td><span class="badge ok">ALIVE</span></td></tr>
+      <tr><td>bigdata_spark_worker_1</td><td>Worker — 2 cores · 2 GB RAM</td><td>:8081</td><td><span class="badge ok">ALIVE</span></td></tr>
+      <tr><td>bigdata_spark_worker_2</td><td>Worker — 2 cores · 2 GB RAM</td><td>:8082</td><td><span class="badge ok">ALIVE</span></td></tr>
+      <tr><td>bigdata_spark_client</td><td>Cliente — spark-submit · 15 pasos completados</td><td>:4040</td><td><span class="badge ok">COMPLETADO</span></td></tr>
+    </table>
+  </div>
+</div>
+
+<div style="text-align:center; margin-top:16px; font-size:11px; color:#4a5a72;">
+  Datos extraídos directamente de: <code>hdfs dfsadmin -report</code> · <code>hdfs dfs -cat metrics/*.csv</code> · <code>Spark REST API</code> · logs de spark-submit &nbsp;|&nbsp; Run ID: official_20260606T191340Z
+</div>
+
+</body>
+</html>

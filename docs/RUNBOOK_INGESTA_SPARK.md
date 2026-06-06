@@ -1,137 +1,133 @@
-# Runbook de ingesta y perfilado Spark
+# Runbook de ingesta y pipeline distribuido Spark + HDFS
 
-## Ejecución completa con Docker/HDFS/Spark
-
-Para ejecutar el proyecto como flujo Big Data real con HDFS, usar:
+## Comando oficial
 
 ```bash
-cd ~/Downloads/proyecto_big_data_riesgo_crediticio
-bash scripts/run_hdfs_pipeline.sh
+bash scripts/run_distributed_cluster.sh
 ```
 
-Este comando construye la imagen Docker, levanta HDFS, carga el TSV en `/proyecto_crediticio/raw` y ejecuta todos los `spark-submit` contra rutas `hdfs:///`.
+Este comando orquesta el pipeline completo en una arquitectura distribuida de **7 contenedores Docker**.
 
-La interfaz del NameNode queda disponible en `http://localhost:9870`.
+---
 
-Salida HDFS validada:
+## Arquitectura
 
-```text
-/proyecto_crediticio/raw/creditos_raw.tsv                 189.0 M
-/proyecto_crediticio/trusted/obligaciones                  69.0 M
-/proyecto_crediticio/analytics/target_validation           52.9 K
-/proyecto_crediticio/resultados/model_experiment             971 B
-/proyecto_crediticio/resultados/profiling_raw               1.3 K
+| Contenedor | Rol | Puerto |
+|---|---|---|
+| `namenode` | HDFS NameNode | 9870 (UI), 9000 (RPC) |
+| `datanode-1` | HDFS DataNode 1 | — |
+| `datanode-2` | HDFS DataNode 2 | — |
+| `spark-master` | Spark Standalone Master | 8080 (UI), 7077 |
+| `spark-worker-1` | Spark Worker 1 | 8081 (UI) |
+| `spark-worker-2` | Spark Worker 2 | 8082 (UI) |
+| `spark-client` | Cliente spark-submit | 4040 (App UI) |
+
+Todos los contenedores se comunican en la red `bigdata_net`.
+
+HDFS usa replicación 2. Cada DataNode tiene un volumen Docker independiente.
+
+---
+
+## Pasos del pipeline
+
+| # | Paso | Descripción |
+|---|---|---|
+| 1 | Exportar XLSM → TSV | Si no existe `data/raw/creditos_raw.tsv` |
+| 2 | Build Docker | `docker compose build` |
+| 3 | Levantar cluster | `docker compose up -d` |
+| 4 | Esperar HDFS | Safe mode OFF |
+| 5 | Esperar 2 DataNodes | `hdfs dfsadmin -report` |
+| 6 | Esperar 2 Workers ALIVE | Spark Master JSON API |
+| 7 | Crear zonas HDFS | raw, trusted, analytics, modelos, scores |
+| 8 | Cargar TSV | `hdfs dfs -put` + `setrep 2` |
+| 9 | Perfilado | `src/01_ingest_profile.py` via spark-submit |
+| 10 | Trusted Parquet | `src/02_clean_to_parquet.py` |
+| 11 | Validación | `src/03_validate_quality_target.py` |
+| 12-13 | Modelos | `src/04_train_compare_models.py` (LR + RF) |
+| 14 | Evidencia post | hdfs dfsadmin, spark master JSON |
+| 15 | Run ID | Guardado en `data/results/cluster_evidence/run_id.txt` |
+
+---
+
+## Configuración Spark
+
+```
+--master spark://spark-master:7077
+--deploy-mode client
+--conf spark.cores.max=4
+--conf spark.executor.cores=1
+--conf spark.executor.memory=1g
+--conf spark.driver.host=spark-client
+--conf spark.driver.bindAddress=0.0.0.0
 ```
 
-Este proyecto no imprime registros reales ni identificadores personales. Los comandos generan archivos intermedios dentro de `data/`, que está excluido de Git.
+El Driver corre en `spark-client` y es accesible desde ambos workers.
+No se usa `local[*]` en ningún paso del pipeline oficial.
 
-## 1. Validar el archivo Excel
+---
+
+## Evidencia generada
+
+```
+data/results/cluster_evidence/
+  hdfs_report_<run_id>.txt        ← hdfs dfsadmin -report
+  hdfs_fsck_<run_id>.txt          ← hdfs fsck con bloques y ubicaciones
+  spark_master_<run_id>.json      ← Spark Master REST API (workers ALIVE)
+  hdfs_report_post_<run_id>.txt   ← post-ejecución
+  spark_master_post_<run_id>.json ← post-ejecución
+  hdfs_tree_<run_id>.txt          ← árbol de rutas HDFS
+  run_id.txt                      ← run_id oficial de la corrida
+```
+
+---
+
+## Rutas HDFS
+
+```
+/proyecto_crediticio/raw/creditos_raw.tsv        ← TSV fuente (replicación 2)
+/proyecto_crediticio/trusted/obligaciones/        ← Parquet limpio
+/proyecto_crediticio/analytics/profile/           ← Perfilado
+/proyecto_crediticio/analytics/validation/        ← Validación calidad
+/proyecto_crediticio/analytics/model_experiment/  ← Métricas, confusión, diagnostics
+/proyecto_crediticio/modelos/<run_id>/            ← PipelineModel LR y RF
+/proyecto_crediticio/resultados/scores/<run_id>/  ← Scores anonimizados
+```
+
+---
+
+## Interfaces UI
+
+| Interfaz | URL |
+|---|---|
+| NameNode HDFS | http://localhost:9870 |
+| Spark Master | http://localhost:8080 |
+| Spark Worker 1 | http://localhost:8081 |
+| Spark Worker 2 | http://localhost:8082 |
+| Spark Application | http://localhost:4040 (durante ejecución) |
+
+---
+
+## Verificación del cluster
 
 ```bash
-python3 src/00_inspect_xlsm.py
+# Dentro del contenedor spark-client:
+python3 scripts/verify_cluster.py \
+  --hdfs-report data/results/cluster_evidence/hdfs_report_<run_id>.txt \
+  --spark-master-json data/results/cluster_evidence/spark_master_<run_id>.json \
+  --minimum-datanodes 2 \
+  --minimum-workers 2
 ```
 
-Salida esperada:
+---
 
-- Hoja `Sheet1`.
-- 32 columnas.
-- Encabezados iguales al diccionario.
-- No se imprimen filas reales.
-
-## 2. Exportar Excel a TSV
-
-El archivo `.xlsm` se inspecciona y exporta por streaming desde los XML internos del libro. Esto evita cargar toda la hoja en memoria.
+## Detener el cluster
 
 ```bash
-python3 src/00_export_xlsm_to_tsv.py \
-  --input "data/raw/ConvertidorEstructura - DATA.xlsm" \
-  --output "data/raw/creditos_raw.tsv"
+docker compose down
 ```
 
-Las columnas de fecha conocidas se normalizan a formato ISO cuando vienen como serial numérico de Excel. El TSV preserva todas las columnas para la zona raw, pero no debe subirse a Git.
-
-## 3. Copiar a HDFS
-
-Dentro del contenedor o entorno Hadoop/Spark de clase:
+Para limpiar también los volúmenes HDFS:
 
 ```bash
-hdfs dfs -mkdir -p /proyecto_crediticio/raw
-hdfs dfs -mkdir -p /proyecto_crediticio/trusted
-hdfs dfs -mkdir -p /proyecto_crediticio/analytics
-hdfs dfs -mkdir -p /proyecto_crediticio/modelos
-hdfs dfs -mkdir -p /proyecto_crediticio/resultados
-hdfs dfs -put -f data/raw/creditos_raw.tsv /proyecto_crediticio/raw/creditos_raw.tsv
-hdfs dfs -ls -h /proyecto_crediticio/raw
+docker compose down -v
 ```
-
-## 4. Ejecutar perfilado raw
-
-```bash
-spark-submit src/01_ingest_profile.py \
-  --input hdfs:///proyecto_crediticio/raw/creditos_raw.tsv \
-  --output hdfs:///proyecto_crediticio/resultados/profiling_raw
-```
-
-Este paso calcula:
-
-- Total de registros, columnas y particiones.
-- Nulos y porcentajes de nulos.
-- Duplicados sin usar columnas sensibles para la llave de comparación.
-- Cardinalidad categórica.
-- Frecuencias de `Estado`, `SubEstado` y `Calificacion`.
-
-## 5. Construir zona trusted en Parquet
-
-```bash
-spark-submit src/02_clean_to_parquet.py \
-  --input hdfs:///proyecto_crediticio/raw/creditos_raw.tsv \
-  --output hdfs:///proyecto_crediticio/trusted/obligaciones
-```
-
-Este paso:
-
-- Convierte enteros, decimales y fechas.
-- Crea `fecha_corte = 2026-04-30`.
-- Crea `credito_cerrado`.
-- Crea variables derivadas: `edad_cliente`, `antiguedad_credito_meses`, `meses_hasta_vencimiento`, `ratio_utilizacion` y `ratio_cuota_saldo`.
-- No define todavía `riesgo_crediticio`.
-
-## 6. Validar salidas
-
-```bash
-hdfs dfs -du -h /proyecto_crediticio/resultados/profiling_raw
-hdfs dfs -du -h /proyecto_crediticio/trusted/obligaciones
-```
-
-## Nota metodológica antes de modelar
-
-El modelado usa `riesgo_crediticio_exp` como target experimental. En un escenario productivo, negocio debe validar la interpretación final de `Estado`, `SubEstado`, `Calificacion`, `NumeroDiasMora` y `ValorMoraTotal`.
-
-## 7. Validar calidad y señales candidatas del target
-
-```bash
-spark-submit src/03_validate_quality_target.py \
-  --input hdfs:///proyecto_crediticio/trusted/obligaciones \
-  --output hdfs:///proyecto_crediticio/analytics/target_validation
-```
-
-Este paso genera únicamente agregados seguros. No imprime PII y no define todavía `riesgo_crediticio`.
-
-## 8. Entrenar comparación experimental MLlib
-
-```bash
-spark-submit src/04_train_compare_models.py \
-  --input hdfs:///proyecto_crediticio/trusted/obligaciones \
-  --output hdfs:///proyecto_crediticio/resultados/model_experiment \
-  --rf-trees 40 \
-  --lr-max-iter 30
-```
-
-Este paso usa `riesgo_crediticio_exp`, un target experimental documentado y pendiente de validación de negocio.
-
-Resultados validados en la corrida HDFS:
-
-| Modelo | Accuracy | Precision positiva | Recall positivo | F1 positivo | AUC-ROC | AUC-PR |
-|---|---:|---:|---:|---:|---:|---:|
-| Regresión Logística | 0.9391 | 0.7981 | 0.8259 | 0.8117 | 0.9442 | 0.8822 |
-| Random Forest | 0.9740 | 0.9857 | 0.8490 | 0.9122 | 0.9832 | 0.9580 |
