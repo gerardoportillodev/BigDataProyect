@@ -27,3 +27,5 @@ spark-warehouse/
 .codex-log/
 
 docs/reference/
+
+data/
