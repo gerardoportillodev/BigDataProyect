@@ -1,5 +1,28 @@
 # Runbook de ingesta y perfilado Spark
 
+## Ejecución completa con Docker/HDFS/Spark
+
+Para ejecutar el proyecto como flujo Big Data real con HDFS, usar:
+
+```bash
+cd ~/Downloads/proyecto_big_data_riesgo_crediticio
+bash scripts/run_hdfs_pipeline.sh
+```
+
+Este comando construye la imagen Docker, levanta HDFS, carga el TSV en `/proyecto_crediticio/raw` y ejecuta todos los `spark-submit` contra rutas `hdfs:///`.
+
+La interfaz del NameNode queda disponible en `http://localhost:9870`.
+
+Salida HDFS validada:
+
+```text
+/proyecto_crediticio/raw/creditos_raw.tsv                 189.0 M
+/proyecto_crediticio/trusted/obligaciones                  69.0 M
+/proyecto_crediticio/analytics/target_validation           52.9 K
+/proyecto_crediticio/resultados/model_experiment             971 B
+/proyecto_crediticio/resultados/profiling_raw               1.3 K
+```
+
 Este proyecto no imprime registros reales ni identificadores personales. Los comandos generan archivos intermedios dentro de `data/`, que está excluido de Git.
 
 ## 1. Validar el archivo Excel
@@ -80,9 +103,9 @@ hdfs dfs -du -h /proyecto_crediticio/resultados/profiling_raw
 hdfs dfs -du -h /proyecto_crediticio/trusted/obligaciones
 ```
 
-## Pendiente antes de modelar
+## Nota metodológica antes de modelar
 
-Antes de entrenar modelos se debe revisar el perfilado de `Estado`, `SubEstado`, `Calificacion`, `NumeroDiasMora` y `ValorMoraTotal` para validar con negocio la definición final de `riesgo_crediticio`.
+El modelado usa `riesgo_crediticio_exp` como target experimental. En un escenario productivo, negocio debe validar la interpretación final de `Estado`, `SubEstado`, `Calificacion`, `NumeroDiasMora` y `ValorMoraTotal`.
 
 ## 7. Validar calidad y señales candidatas del target
 
@@ -105,3 +128,10 @@ spark-submit src/04_train_compare_models.py \
 ```
 
 Este paso usa `riesgo_crediticio_exp`, un target experimental documentado y pendiente de validación de negocio.
+
+Resultados validados en la corrida HDFS:
+
+| Modelo | Accuracy | Precision positiva | Recall positivo | F1 positivo | AUC-ROC | AUC-PR |
+|---|---:|---:|---:|---:|---:|---:|
+| Regresión Logística | 0.9391 | 0.7981 | 0.8259 | 0.8117 | 0.9442 | 0.8822 |
+| Random Forest | 0.9740 | 0.9857 | 0.8490 | 0.9122 | 0.9832 | 0.9580 |

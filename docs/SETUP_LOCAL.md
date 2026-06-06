@@ -40,6 +40,15 @@ python src/03_validate_quality_target.py \
   --output data/analytics/target_validation
 ```
 
-## Pendiente para el entorno Big Data completo
+## Entorno Big Data completo
 
-Para usar HDFS real falta abrir Docker Desktop o compartir el `docker-compose.yml` usado en clase. Cuando Docker esté encendido, se pueden ejecutar los comandos de `docs/RUNBOOK_INGESTA_SPARK.md`.
+El proyecto incluye `docker-compose.yml` para levantar un contenedor con Hadoop HDFS y Spark. Los comandos completos están en `docs/RUNBOOK_INGESTA_SPARK.md`.
+
+## Ejecutar con Docker, HDFS y Spark
+
+```bash
+cd ~/Downloads/proyecto_big_data_riesgo_crediticio
+bash scripts/run_hdfs_pipeline.sh
+```
+
+Este comando levanta el contenedor `bigdata_riesgo_crediticio`, inicia NameNode/DataNode y ejecuta el pipeline con rutas HDFS.

@@ -56,6 +56,11 @@ Zonas propuestas en HDFS:
 
 ```text
 .
+├── docker/
+│   ├── Dockerfile
+│   ├── hadoop/
+│   ├── scripts/
+│   └── spark/
 ├── docs/
 │   ├── DATA_DICTIONARY.md
 │   ├── FINAL_TECHNICAL_REPORT.md
@@ -67,6 +72,7 @@ Zonas propuestas en HDFS:
 │   └── TARGET_VALIDATION_NOTES.md
 ├── scripts/
 │   ├── docker_terminal_check.sh
+│   ├── run_hdfs_pipeline.sh
 │   ├── run_local_spark_pipeline.sh
 │   ├── run_model_experiment.sh
 │   └── use_local_spark.sh
@@ -83,6 +89,7 @@ Zonas propuestas en HDFS:
 │   ├── test_clean_to_parquet.py
 │   └── test_xlsm_utils.py
 ├── .gitignore
+├── docker-compose.yml
 ├── README.md
 └── requirements.txt
 ```
@@ -274,6 +281,50 @@ SPARK_LOCAL_IP=127.0.0.1 python src/04_train_compare_models.py \
   --lr-max-iter 30
 ```
 
+## Ejecución completa con Docker, HDFS y Spark
+
+El proyecto incluye un entorno Docker reproducible con Hadoop HDFS y Spark. Este flujo levanta un contenedor real, crea las zonas HDFS, carga el TSV a HDFS y ejecuta los scripts con `spark-submit` leyendo desde `hdfs:///...`.
+
+```bash
+cd ~/Downloads/proyecto_big_data_riesgo_crediticio
+bash scripts/run_hdfs_pipeline.sh
+```
+
+Al finalizar, Docker debe mostrar un contenedor activo:
+
+```bash
+docker ps
+```
+
+El NameNode queda disponible en:
+
+```text
+http://localhost:9870
+```
+
+El script ejecuta estas fases:
+
+1. Construye la imagen Docker `bigdata`.
+2. Levanta el contenedor `bigdata_riesgo_crediticio`.
+3. Inicia NameNode y DataNode.
+4. Crea zonas HDFS en `/proyecto_crediticio`.
+5. Sube `data/raw/creditos_raw.tsv` a HDFS.
+6. Ejecuta perfilado raw con Spark.
+7. Construye Parquet trusted en HDFS.
+8. Genera analítica de validación del target.
+9. Entrena Regresión Logística y Random Forest con MLlib.
+10. Muestra tamaños de salidas en HDFS.
+
+Resultado validado en HDFS:
+
+```text
+/proyecto_crediticio/raw/creditos_raw.tsv                 189.0 M
+/proyecto_crediticio/trusted/obligaciones                  69.0 M
+/proyecto_crediticio/analytics/target_validation           52.9 K
+/proyecto_crediticio/resultados/model_experiment             971 B
+/proyecto_crediticio/resultados/profiling_raw               1.3 K
+```
+
 ## Ejecución en HDFS/Spark tipo clase
 
 Cuando se use el contenedor Hadoop/Spark de clase, el flujo esperado es:
@@ -383,7 +434,7 @@ excluyendo NumeroDiasMora = 999
 | Modelo | Accuracy | Precision positiva | Recall positivo | F1 positivo | AUC-ROC | AUC-PR |
 |---|---:|---:|---:|---:|---:|---:|
 | Regresión Logística | 0.9391 | 0.7981 | 0.8259 | 0.8117 | 0.9442 | 0.8822 |
-| Random Forest | 0.9752 | 0.9814 | 0.8600 | 0.9167 | 0.9850 | 0.9610 |
+| Random Forest | 0.9740 | 0.9857 | 0.8490 | 0.9122 | 0.9832 | 0.9580 |
 
 Matriz de confusión de Regresión Logística:
 
@@ -398,10 +449,10 @@ Matriz de confusión de Random Forest:
 
 | Real | Predicción | Casos |
 |---:|---:|---:|
-| 0 | 0 | 234,239 |
-| 0 | 1 | 722 |
-| 1 | 0 | 6,215 |
-| 1 | 1 | 38,182 |
+| 0 | 0 | 234,413 |
+| 0 | 1 | 548 |
+| 1 | 0 | 6,704 |
+| 1 | 1 | 37,693 |
 
 ## Interpretación
 
